@@ -1,0 +1,22 @@
+{
+  "name": "@tt-a1i/hive-jev-integration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional Jev decision, compaction, review, and browser execution tools for Hive.",
+  "scripts": {
+    "check": "node --check src/server.mjs && node --check src/mcp.mjs && node --check src/core.mjs && node --check src/browser.mjs && node --check src/compaction.mjs",
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -44,6 +44,7 @@ afterEach(() => cleanup())
 test('renders Slide 1 (Welcome) with Next button', () => {
   render(<FirstRunWizard open onClose={() => {}} onAddWorkspace={() => {}} onTryDemo={() => {}} />)
   expect(screen.getByText(/welcome to hive/i)).toBeInTheDocument()
+  expect(screen.getByTestId('first-run-logo')).toHaveAttribute('src', '/logo.png')
   expect(screen.getByRole('button', { name: /^next$/i })).toBeInTheDocument()
 })
 

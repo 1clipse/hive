@@ -15,6 +15,19 @@ export class PtyInactiveError extends HttpError {
   }
 }
 
+export class PromptReadinessTimeoutError extends Error {
+  readonly code = 'PROMPT_READINESS_TIMEOUT'
+  readonly command: string
+  readonly runId: string
+
+  constructor(command: string, runId: string) {
+    super(`Timed out waiting for ${command} prompt readiness: ${runId}`)
+    this.name = 'PromptReadinessTimeoutError'
+    this.command = command
+    this.runId = runId
+  }
+}
+
 export class UnauthorizedError extends HttpError {
   constructor(message: string) {
     super(401, message)

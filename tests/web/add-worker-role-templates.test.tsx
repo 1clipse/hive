@@ -45,11 +45,13 @@ const Harness = () => {
   return (
     <ToastProvider>
       <AddWorkerDialog
+        avatar={composer.avatar}
         commandPresets={composer.commandPresets}
         commandPresetId={composer.commandPresetId}
         creating={composer.creating}
         customTemplates={composer.customTemplates}
         onApplyMarketplaceImport={composer.applyMarketplaceImport}
+        onAvatarChange={composer.setAvatar}
         onClose={() => {}}
         onDeleteTemplate={composer.deleteTemplate}
         onNameChange={composer.setWorkerName}

@@ -1,23 +1,35 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
+import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { createApp } from '../../src/server/app.js'
-import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { createRuntimeStore, type RuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
-const servers: Array<{ close: () => void }> = []
+const servers: Server[] = []
+const stores: RuntimeStore[] = []
 
-afterEach(() => {
+const closeServer = (server: Server) =>
+  new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()))
+  })
+
+afterEach(async () => {
   while (servers.length > 0) {
-    servers.pop()?.close()
+    await closeServer(servers.pop() as Server)
+  }
+
+  while (stores.length > 0) {
+    await stores.pop()?.close()
   }
 
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -29,6 +41,7 @@ describe('agent launch config api', () => {
     tempDirs.push(dataDir)
 
     const store = createRuntimeStore({ dataDir })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { TerminalRunSummary } from '../../web/src/api.js'
 import { App } from '../../web/src/app.js'
+import { APP_VERSION } from '../../web/src/version.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 vi.mock('@xterm/xterm', () => ({
@@ -123,6 +125,7 @@ const fetchThroughServer = async (input: RequestInfo | URL, init?: RequestInit) 
 beforeEach(async () => {
   window.localStorage?.clear?.()
   window.localStorage.setItem('hive.first-run-seen', '1')
+  window.localStorage.setItem('hive.last-seen-version', APP_VERSION)
   workspacePath = mkdtempSync(join(tmpdir(), 'hive-app-shell-terminal-flow-'))
   mkdirSync(workspacePath, { recursive: true })
   tempDirs.push(workspacePath)
@@ -162,7 +165,7 @@ afterEach(async () => {
   cleanupServer = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
   cookie = ''
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 const waitForShellSlot = async (runId: string) => {

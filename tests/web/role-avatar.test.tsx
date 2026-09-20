@@ -8,18 +8,25 @@ afterEach(() => cleanup())
 
 // `role` here is a domain prop on RoleAvatar (worker role: coder/reviewer/…),
 // not an HTML ARIA role attribute. biome's useValidAriaRole misfires on the
-// JSX attribute name; suppress per-call.
+// JSX attribute name; suppress per-call where the value is a string literal.
 
 describe('RoleAvatar', () => {
   test.each([
-    ['coder', 'Co'],
-    ['reviewer', 'Re'],
-    ['tester', 'Te'],
-    ['custom', 'Cu'],
-    ['orchestrator', 'Or'],
-  ])('role=%s renders initials %s', (role, expected) => {
+    ['coder', 'code'],
+    ['reviewer', 'review'],
+    ['tester', 'test'],
+    ['custom', 'custom'],
+    ['orchestrator', 'crown'],
+  ])('role=%s renders its own glyph (data-icon=%s) as an svg', (role, icon) => {
     render(<RoleAvatar role={role as never} />)
-    expect(screen.getByTestId('role-avatar').textContent).toBe(expected)
+    const el = screen.getByTestId('role-avatar')
+    // Each role maps to a distinct lucide glyph. Asserting the stable
+    // `data-icon` marker (not lucide's churny SVG class names) catches a wrong
+    // or duplicated mapping; the <svg> check catches "glyph dropped entirely".
+    expect(el.getAttribute('data-icon')).toBe(icon)
+    expect(el.querySelector('svg')).not.toBeNull()
+    // The old two-letter initials (Co/Re/…) are gone — no text content left.
+    expect(el.textContent).toBe('')
   })
 
   test('data-role attribute reflects role for theming', () => {
@@ -28,24 +35,26 @@ describe('RoleAvatar', () => {
     expect(screen.getByTestId('role-avatar').getAttribute('data-role')).toBe('coder')
   })
 
-  test('size prop controls width + height + scaled fontSize together', () => {
+  test('size prop scales the glyph with the avatar (svg size tracks size prop)', () => {
     // biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role
     render(<RoleAvatar role="coder" size={40} />)
     const el = screen.getByTestId('role-avatar')
     expect(el.style.width).toBe('40px')
     expect(el.style.height).toBe('40px')
-    // initials size scales with avatar size; spec §4.4 specifies a proportional
-    // glyph that reads at any size — 40 * 0.34 = 13.6 → rounds to 14.
-    expect(el.style.fontSize).toBe('14px')
+    // glyph size = round(40 * 0.56) = 22 → lucide renders width/height="22"
+    const svg = el.querySelector('svg')
+    expect(svg?.getAttribute('width')).toBe('22')
+    expect(svg?.getAttribute('height')).toBe('22')
   })
 
-  test('default size is 32px — width + height + 11px font', () => {
+  test('default size is 32px — width + height + a proportional 18px glyph', () => {
     // biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role
     render(<RoleAvatar role="coder" />)
     const el = screen.getByTestId('role-avatar')
     expect(el.style.width).toBe('32px')
     expect(el.style.height).toBe('32px')
-    expect(el.style.fontSize).toBe('11px')
+    // glyph size = round(32 * 0.56) = 18
+    expect(el.querySelector('svg')?.getAttribute('width')).toBe('18')
   })
 
   test('background and border are derived from role color (status-blue for coder)', () => {

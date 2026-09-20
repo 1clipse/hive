@@ -5,6 +5,7 @@ import type { TerminalRunSummary } from '../api.js'
 import type { TranslationKey } from '../i18n.js'
 import { useI18n } from '../i18n.js'
 import { useNotifications } from './NotificationProvider.js'
+import { useReportNotifications } from './useReportNotifications.js'
 
 const ROLE_LABEL_KEYS: Record<WorkerRole, TranslationKey> = {
   coder: 'role.coder',
@@ -48,6 +49,7 @@ export const WorkspaceNotifications = ({
   const { notify } = useNotifications()
   const { t } = useI18n()
   const previous = useRef<Snapshot | null>(null)
+  useReportNotifications(workspace, workers)
 
   useEffect(() => {
     if (!workspace) {
@@ -71,7 +73,6 @@ export const WorkspaceNotifications = ({
           detail: t('notifications.workerStopped.detail', {
             name: worker.name,
             workspace: workspace.name,
-            count: worker.pendingTaskCount,
           }),
           kind: 'error',
           title: t('notifications.workerStopped.title'),
@@ -90,24 +91,9 @@ export const WorkspaceNotifications = ({
           kind: 'success',
           title: t('notifications.workerStarted.title'),
         })
-        continue
       }
 
-      const completedTask =
-        worker.pendingTaskCount < before.pendingTaskCount ||
-        (before.status === 'working' && worker.status === 'idle')
-      if (completedTask) {
-        notify({
-          brief: t('notifications.workerReported.brief', { name: worker.name }),
-          detail: t('notifications.workerReported.detail', {
-            name: worker.name,
-            workspace: workspace.name,
-            count: worker.pendingTaskCount,
-          }),
-          kind: 'success',
-          title: t('notifications.workerReported.title'),
-        })
-      }
+      // Report notifications use the committed ledger in useReportNotifications.
     }
   }, [notify, t, workers, workspace])
 

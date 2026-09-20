@@ -1,15 +1,18 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test } from 'vitest'
-
 import {
+  captureStdoutRegexSessionId,
   doesCapturedSessionExist,
   snapshotSessionIdsForCapture,
 } from '../../src/server/session-capture.js'
 import { readCodexSessionFirstLine } from '../../src/server/session-capture-codex.js'
+import {
+  hasOpenCodeSession,
+  snapshotOpenCodeSessionIds,
+} from '../../src/server/session-capture-opencode.js'
+import Database from '../../src/server/sqlite.js'
 
 const tempDirs: string[] = []
 const originalCodexHome = process.env.CODEX_HOME
@@ -70,6 +73,27 @@ describe('multi-CLI session capture', () => {
 
     expect(readCodexSessionFirstLine(filePath, firstLine.length + 8)).toBe(firstLine)
     expect(readCodexSessionFirstLine(filePath, firstLine.length - 1)).toBeNull()
+  })
+
+  test('requires parseable Codex cwd metadata before a rollout filename match counts as existing', () => {
+    const codexHome = makeTempDir('hive-codex-partial')
+    const cwd = join(codexHome, 'workspace')
+    mkdirSync(cwd, { recursive: true })
+    process.env.CODEX_HOME = codexHome
+    const sessionId = '019dc277-0e8e-75c1-9794-94929426288e'
+    const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(join(sessionDir, `rollout-2026-04-30T00-00-00-${sessionId}.jsonl`), '{')
+
+    const capture = {
+      pattern: '~/.codex/sessions/**/*.jsonl',
+      source: 'codex_session_jsonl_dir' as const,
+    }
+
+    expect(doesCapturedSessionExist(cwd, capture, sessionId)).toBe(false)
+    expect(doesCapturedSessionExist(join(codexHome, 'other-workspace'), capture, sessionId)).toBe(
+      false
+    )
   })
 
   test('captures Gemini sessions by project root from GEMINI tmp chat json files', () => {
@@ -133,5 +157,73 @@ describe('multi-CLI session capture', () => {
     )
     expect(doesCapturedSessionExist(cwd, capture, 'ses_25c8f572efferzSV4Mgjo99WqB')).toBe(true)
     expect(doesCapturedSessionExist(cwd, capture, 'ses_archived')).toBe(false)
+  })
+
+  test('matches OpenCode session directories case-insensitively on win32', () => {
+    const dataDir = makeTempDir('hive-opencode-win32')
+    const dbPath = join(dataDir, 'opencode.db')
+    const sessionId = 'ses_windows_path'
+    const db = new Database(dbPath)
+    db.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        directory TEXT NOT NULL,
+        time_archived INTEGER
+      );
+    `)
+    db.prepare('INSERT INTO session (id, directory, time_archived) VALUES (?, ?, NULL)').run(
+      sessionId,
+      'C:\\Users\\Admin\\workspace'
+    )
+    db.close()
+
+    expect(snapshotOpenCodeSessionIds('c:/users/admin/workspace', dbPath, 'win32')).toEqual(
+      new Set([sessionId])
+    )
+    expect(
+      hasOpenCodeSession('c:/users/admin/workspace', sessionId, undefined, 'win32', dbPath)
+    ).toBe(true)
+    expect(snapshotOpenCodeSessionIds('c:/users/admin/workspace', dbPath, 'linux')).toEqual(
+      new Set()
+    )
+  })
+
+  test('captures Hermes-style session ids from PTY output with stdout_regex', async () => {
+    let output = 'Hermes Agent v0.15.1\n'
+    const captured: string[] = []
+
+    setTimeout(() => {
+      output += 'Session: 20260602_140311_be67e0\n❯ '
+    }, 20)
+
+    await captureStdoutRegexSessionId(
+      String.raw`Session:\s*([A-Za-z0-9_-]+)`,
+      () => output,
+      new Set(),
+      (sessionId) => captured.push(sessionId),
+      500,
+      10
+    )
+
+    expect(captured).toEqual(['20260602_140311_be67e0'])
+  })
+
+  test('stdout_regex capture fails closed when the regex is invalid or output is unavailable', async () => {
+    const captured: string[] = []
+
+    await captureStdoutRegexSessionId(
+      '[',
+      () => 'Session: should-not-parse',
+      new Set(),
+      (id) => captured.push(id)
+    )
+    await captureStdoutRegexSessionId(
+      String.raw`Session:\s*([A-Za-z0-9_-]+)`,
+      undefined,
+      new Set(),
+      (id) => captured.push(id)
+    )
+
+    expect(captured).toEqual([])
   })
 })

@@ -8,6 +8,35 @@ import {
   saveActiveWorkspaceId,
 } from './api.js'
 
+export const UI_SESSION_BOOTSTRAP_TIMEOUT_MS = 15_000
+
+const withBootstrapTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs = UI_SESSION_BOOTSTRAP_TIMEOUT_MS
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    let settled = false
+    const timer = window.setTimeout(() => {
+      settled = true
+      reject(new Error('Hive runtime bootstrap timed out'))
+    }, timeoutMs)
+
+    promise.then(
+      (value) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+
 const resolveActiveWorkspaceId = (workspaces: WorkspaceSummary[], persistedId: string | null) => {
   if (persistedId && workspaces.some((workspace) => workspace.id === persistedId)) {
     return persistedId
@@ -39,14 +68,14 @@ export const useInitializeUiSession = (
 ) => {
   useEffect(() => {
     let cancelled = false
-    void initializeUiSession()
-      .then(async () => {
-        const [items, persistedId] = await Promise.all([
-          listWorkspaces(),
-          getActiveWorkspaceId().catch(() => null),
-        ])
-        return { items, persistedId }
-      })
+    const bootstrap = initializeUiSession().then(async () => {
+      const [items, persistedId] = await Promise.all([
+        listWorkspaces(),
+        getActiveWorkspaceId().catch(() => null),
+      ])
+      return { items, persistedId }
+    })
+    void withBootstrapTimeout(bootstrap)
       .then(({ items, persistedId }) => {
         if (!cancelled) {
           setWorkspaces((current) => {

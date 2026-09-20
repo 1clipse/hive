@@ -1,4 +1,4 @@
-import { FolderPlus, Plus, Trash2, X } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, FolderPlus, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
@@ -11,10 +11,12 @@ import { WorkspaceAvatar } from './WorkspaceAvatar.js'
 
 type SidebarProps = {
   activeWorkspaceId: string | null
+  collapsed?: boolean
   createDisabledReason?: string
   onCreateClick: () => void
   onDeleteWorkspace: (workspace: WorkspaceSummary) => void | Promise<void>
   onSelectWorkspace: (workspaceId: string) => void
+  onToggleCollapse?: () => void
   workersByWorkspaceId: Record<string, TeamListItem[]>
   workspaces: WorkspaceSummary[] | null
 }
@@ -36,6 +38,7 @@ const workerSummary = (
 }
 
 const GITHUB_DISMISSED_KEY = 'hive.sidebar.githubDismissed'
+const DEMO_VIDEO_URL = 'https://www.bilibili.com/video/BV1UHLp6nEQR'
 
 const readGithubDismissed = (): boolean => {
   if (typeof window === 'undefined') return false
@@ -48,10 +51,12 @@ const readGithubDismissed = (): boolean => {
 
 export const Sidebar = ({
   activeWorkspaceId,
+  collapsed = false,
   createDisabledReason,
   onCreateClick,
   onDeleteWorkspace,
   onSelectWorkspace,
+  onToggleCollapse,
   workersByWorkspaceId,
   workspaces,
 }: SidebarProps) => {
@@ -123,57 +128,72 @@ export const Sidebar = ({
   )
 
   return (
-    <nav aria-label="Workspaces" className="flex h-full flex-col">
-      <div
-        className="flex items-center justify-between gap-2 px-3 pt-3 pb-2"
-        style={{ boxShadow: 'inset 0 -1px 0 var(--border)' }}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="ws-sidebar-title__text text-xs font-medium text-ter"
-            data-testid="workspace-sidebar-title"
-          >
+    <nav aria-label={t('sidebar.workspaces')} className="ws-sidebar flex h-full flex-col">
+      <div className="ws-sidebar-header flex items-center justify-between gap-2">
+        <div className="ws-sidebar-title flex min-w-0 items-center gap-2">
+          <span className="ws-sidebar-title__text" data-testid="workspace-sidebar-title">
             {t('sidebar.workspaces')}
           </span>
           {workspaces && workspaces.length > 0 ? (
-            <span className="ws-sidebar-count mono rounded bg-2 px-1.5 py-0.5 text-xs text-ter">
-              {workspaces.length}
-            </span>
+            <span className="ws-sidebar-count">{workspaces.length}</span>
           ) : null}
         </div>
+        {onToggleCollapse ? (
+          <Tooltip
+            side="right"
+            label={collapsed ? t('layout.sidebarExpand') : t('layout.sidebarCollapse')}
+          >
+            <button
+              type="button"
+              aria-label={collapsed ? t('layout.sidebarExpand') : t('layout.sidebarCollapse')}
+              aria-expanded={!collapsed}
+              data-testid="workspace-sidebar-toggle"
+              onClick={onToggleCollapse}
+              className="ws-collapse-toggle"
+            >
+              {collapsed ? (
+                <ChevronsRight size={16} aria-hidden />
+              ) : (
+                <ChevronsLeft size={16} aria-hidden />
+              )}
+            </button>
+          </Tooltip>
+        ) : null}
       </div>
       {workspaces === null ? (
         <p className="px-3 py-2 text-xs text-ter">{t('common.loading')}</p>
       ) : workspaces.length === 0 ? (
-        <div className="flex-1 px-2 py-4">
-          <EmptyState
-            title={t('sidebar.noWorkspaces')}
-            description={createDisabledReason ?? t('sidebar.noWorkspacesDesc')}
-            icon={<FolderPlus size={20} />}
-            action={
-              <button
-                type="button"
-                onClick={createDisabled ? undefined : onCreateClick}
-                disabled={createDisabled}
-                aria-label={t('sidebar.newWorkspace')}
-                title={createDisabledReason ?? t('sidebar.newWorkspace')}
-                className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Plus size={14} aria-hidden />
-                {t('sidebar.newWorkspace')}
-              </button>
-            }
-          />
+        <div className="ws-empty flex-1 px-2 py-4">
+          <div className="ws-empty__wide">
+            <EmptyState
+              title={t('sidebar.noWorkspaces')}
+              description={createDisabledReason ?? t('sidebar.noWorkspacesDesc')}
+              icon={<FolderPlus size={20} />}
+              action={
+                <button
+                  type="button"
+                  onClick={createDisabled ? undefined : onCreateClick}
+                  disabled={createDisabled}
+                  aria-label={t('sidebar.newWorkspace')}
+                  title={createDisabledReason ?? t('sidebar.newWorkspace')}
+                  className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus size={14} aria-hidden />
+                  {t('sidebar.newWorkspace')}
+                </button>
+              }
+            />
+          </div>
         </div>
       ) : (
-        <ul className="flex-1 scroll-y pb-2">
+        <ul className="ws-sidebar-list flex-1 scroll-y">
           {workspaces.map((workspace) => {
             const workers = workersByWorkspaceId[workspace.id]
             const isActive = workspace.id === activeWorkspaceId
             const hasWorking = hasWorkingMember(workers)
             const workingCount = countWorkingMembers(workers)
             return (
-              <li key={workspace.id} className="group relative">
+              <li key={workspace.id} className="ws-sidebar-item group relative">
                 {/* Wide layout — mini avatar + name, path moved to tooltip. */}
                 {/* Hidden by `@container ws-sidebar (max-width: 96px)`. */}
                 <Tooltip
@@ -191,19 +211,19 @@ export const Sidebar = ({
                     aria-current={isActive ? 'true' : undefined}
                     data-workspace-path={workspace.path}
                     onClick={() => onSelectWorkspace(workspace.id)}
-                    className={`ws-row flex w-full items-center gap-2.5 py-1.5 pr-7 pl-2 text-left${
+                    className={`ws-row flex items-center gap-2.5 text-left pointer-coarse:min-h-11${
                       isActive ? ' active' : ''
                     }`}
                   >
                     <WorkspaceAvatar
                       workspaceId={workspace.id}
                       name={workspace.name}
-                      isActive={isActive}
+                      isActive={false}
                       working={hasWorking}
                       workingCount={workingCount}
                     />
                     <span
-                      className={`min-w-0 flex-1 truncate text-sm ${
+                      className={`ws-row__name min-w-0 flex-1 truncate ${
                         isActive ? 'font-medium text-pri' : 'text-pri'
                       }`}
                     >
@@ -244,7 +264,7 @@ export const Sidebar = ({
                     type="button"
                     aria-label={t('sidebar.deleteAria', { name: workspace.name })}
                     onClick={() => requestDelete(workspace)}
-                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
+                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors pointer-coarse:h-10 pointer-coarse:w-10 hover:text-status-red focus:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2 size={14} aria-hidden />
                   </button>
@@ -266,8 +286,7 @@ export const Sidebar = ({
                    reliably surface on a disabled <button> across browsers,
                    so screen-readers and Safari users still get the reason. */
                 title={createDisabledReason ?? undefined}
-                className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: 'var(--border-bright)' }}
+                className="ws-add ws-add--inline flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={14} aria-hidden />
                 <span className="ws-add__label">{t('sidebar.newWorkspace')}</span>
@@ -278,10 +297,24 @@ export const Sidebar = ({
       )}
 
       {githubDismissed ? null : (
-        <div
-          className="ws-sidebar-footer group relative"
-          style={{ boxShadow: 'inset 0 1px 0 var(--border)' }}
-        >
+        <div className="ws-sidebar-footer group relative">
+          <a
+            href={DEMO_VIDEO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('sidebar.openDemoVideo')}
+            title={t('sidebar.openDemoVideo')}
+            className="ws-sidebar-footer__link flex items-center gap-2.5 px-3 py-3 text-sm text-ter transition-colors hover:text-pri"
+          >
+            <img
+              src="/bilibili.ico"
+              alt=""
+              aria-hidden="true"
+              className="h-[18px] w-[18px] rounded-[4px] object-cover"
+              draggable={false}
+            />
+            <span className="ws-sidebar-footer__label">{t('sidebar.demoVideo')}</span>
+          </a>
           <a
             href="https://github.com/tt-a1i/hive"
             target="_blank"
@@ -300,7 +333,7 @@ export const Sidebar = ({
             aria-label={t('sidebar.dismissRepository')}
             title={t('sidebar.dismissRepository')}
             onClick={dismissGithubFooter}
-            className="ws-sidebar-footer__dismiss absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded text-ter opacity-0 transition-opacity hover:bg-3 hover:text-pri focus:opacity-100 group-hover:opacity-100"
+            className="ws-sidebar-footer__dismiss absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded text-ter opacity-0 transition-opacity pointer-coarse:h-8 pointer-coarse:w-8 hover:bg-3 hover:text-pri focus:opacity-100 group-hover:opacity-100"
           >
             <X size={10} aria-hidden />
           </button>

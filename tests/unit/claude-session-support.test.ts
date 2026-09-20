@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
 import { withPresetResumeArgs } from '../../src/server/claude-session-support.js'
+import { isResumeLaunchConfig } from '../../src/server/preset-launch-support.js'
 import {
   captureClaudeSessionId,
   encodeClaudeProjectPath,
@@ -41,6 +42,38 @@ afterEach(() => {
 describe('claude session support', () => {
   test('encodeClaudeProjectPath handles Windows separators', () => {
     expect(encodeClaudeProjectPath('C:\\Users\\admin\\project')).toBe('C--Users-admin-project')
+  })
+
+  // The encoding must MATCH what Claude Code itself produces for the project
+  // metadata directory under `~/.claude/projects/`. Otherwise Hive looks in
+  // one directory while Claude wrote to another, and session resume silently
+  // fails. The character set below was determined empirically by running
+  // `claude --print "x"` in test directories with each character and
+  // observing the directory name Claude Code created.
+  test('encodeClaudeProjectPath replaces every non-alphanumeric non-hyphen character (empirically matched against Claude Code)', () => {
+    // Every char in this string EXCEPT letters/digits/hyphen must become `-`,
+    // exactly one dash per source character (no collapsing).
+    expect(encodeClaudeProjectPath('/tmp/foo_bar')).toBe('-tmp-foo-bar')
+    expect(encodeClaudeProjectPath('/tmp/foo.bar')).toBe('-tmp-foo-bar')
+    expect(encodeClaudeProjectPath('/tmp/with space dir')).toBe('-tmp-with-space-dir')
+    expect(encodeClaudeProjectPath('/tmp/foo(paren)+plus')).toBe('-tmp-foo-paren--plus')
+    expect(encodeClaudeProjectPath('/tmp/at@hash#amp&')).toBe('-tmp-at-hash-amp-')
+    expect(encodeClaudeProjectPath('/tmp/[brk]')).toBe('-tmp--brk-')
+  })
+
+  test('encodeClaudeProjectPath preserves literal hyphens (so `mirofish-frontend` stays intact)', () => {
+    expect(encodeClaudeProjectPath('/Users/admin/code/mirofish-frontend')).toBe(
+      '-Users-admin-code-mirofish-frontend'
+    )
+  })
+
+  test('encodeClaudeProjectPath replaces non-ASCII characters one-for-one', () => {
+    // Windows usernames with Chinese characters (`C:\Users\张三\project`) are
+    // a known case where the previous Hive regex left CJK chars intact while
+    // Claude Code replaced them with `-`. Verified empirically against
+    // `claude --print` in a CJK-named directory.
+    expect(encodeClaudeProjectPath('/tmp/张三')).toBe('-tmp---')
+    expect(encodeClaudeProjectPath('C:\\Users\\张三\\project')).toBe('C--Users----project')
   })
 
   test('snapshotClaudeSessionIds returns an empty set when the project directory is missing', () => {
@@ -176,7 +209,7 @@ describe('claude session support', () => {
       resumeArgsTemplate: '--resume {session_id}',
       sessionIdCapture: presetCapture,
     }
-    writeSession(root, cwd, sessionId, '你是 Demo 的 Bob（coder）。\n')
+    writeSession(root, cwd, sessionId, 'You are Bob (coder) in workspace Demo.\n')
     const invalidSessionIds: string[] = []
 
     const result = withPresetResumeArgs(
@@ -185,7 +218,7 @@ describe('claude session support', () => {
       sessionId,
       cwd,
       {
-        contentIncludes: '你是 Demo 的 Alice（coder）。',
+        contentIncludes: 'You are Alice (coder) in workspace Demo.',
       },
       (invalidSessionId) => invalidSessionIds.push(invalidSessionId)
     )
@@ -221,7 +254,107 @@ describe('claude session support', () => {
     })
   })
 
-  test('withPresetResumeArgs skips resume when capture source is unsupported', () => {
+  test('withPresetResumeArgs normalizes stale Windows Codex node entrypoints before injecting yolo args', () => {
+    const result = withPresetResumeArgs(
+      {
+        command: 'C:\\Program Files\\nodejs\\node.exe',
+        args: [
+          'C:\\Users\\zzy\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
+          '--model',
+          'gpt-5',
+        ],
+        commandPresetId: 'codex',
+        interactiveCommand: 'C:\\Program Files\\nodejs\\node.exe',
+      },
+      {
+        command: 'codex',
+        id: 'codex',
+        resumeArgsTemplate: 'resume {session_id}',
+        sessionIdCapture: {
+          source: 'codex_session_jsonl_dir',
+          pattern: '~/.codex/sessions/**/*.jsonl',
+        },
+        yoloArgsTemplate: ['--dangerously-bypass-approvals-and-sandbox'],
+      },
+      undefined,
+      'C:\\repo'
+    )
+
+    expect(result).toMatchObject({
+      command: 'codex',
+      args: ['--dangerously-bypass-approvals-and-sandbox', '--model', 'gpt-5'],
+      interactiveCommand: 'codex',
+    })
+  })
+
+  test('withPresetResumeArgs keeps Codex resume args after the normalized CLI command', () => {
+    const result = withPresetResumeArgs(
+      {
+        command: 'C:/Program Files/nodejs/node.exe',
+        args: ['C:/Users/zzy/AppData/Roaming/npm/node_modules/@openai/codex/bin/codex.js'],
+        commandPresetId: 'codex',
+      },
+      {
+        command: 'codex',
+        id: 'codex',
+        resumeArgsTemplate: 'resume {session_id}',
+        sessionIdCapture: {
+          source: 'codex_session_jsonl_dir',
+          pattern: '~/.codex/sessions/**/*.jsonl',
+        },
+        yoloArgsTemplate: ['--dangerously-bypass-approvals-and-sandbox'],
+      },
+      '019dc277-0e8e-75c1-9794-94929426288e',
+      'C:/repo'
+    )
+
+    expect(result).toMatchObject({
+      command: 'codex',
+      args: [
+        '--dangerously-bypass-approvals-and-sandbox',
+        'resume',
+        '019dc277-0e8e-75c1-9794-94929426288e',
+      ],
+      resumedSessionId: '019dc277-0e8e-75c1-9794-94929426288e',
+    })
+  })
+
+  test('withPresetResumeArgs does not duplicate an existing Codex resume subcommand when yolo args are injected', () => {
+    const result = withPresetResumeArgs(
+      {
+        command: 'codex',
+        args: ['resume', 'existing-session'],
+      },
+      {
+        command: 'codex',
+        id: 'codex',
+        resumeArgsTemplate: 'resume {session_id}',
+        sessionIdCapture: {
+          source: 'codex_session_jsonl_dir',
+          pattern: '~/.codex/sessions/**/*.jsonl',
+        },
+        yoloArgsTemplate: ['--dangerously-bypass-approvals-and-sandbox'],
+      },
+      '019dc277-0e8e-75c1-9794-94929426288e',
+      '/tmp/project'
+    )
+
+    expect(result).toMatchObject({
+      args: ['--dangerously-bypass-approvals-and-sandbox', 'resume', 'existing-session'],
+    })
+    expect(result).not.toHaveProperty('resumedSessionId')
+  })
+
+  test('withPresetResumeArgs leaves node entrypoints untouched without a Codex preset binding', () => {
+    const config = {
+      command: 'C:\\Program Files\\nodejs\\node.exe',
+      args: ['C:\\Users\\zzy\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js'],
+    }
+
+    expect(withPresetResumeArgs(config, null, undefined, 'C:\\repo')).toBe(config)
+  })
+
+  test('withPresetResumeArgs skips resume when capture source is unknown', () => {
     const config = {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
@@ -231,9 +364,9 @@ describe('claude session support', () => {
       {
         resumeArgsTemplate: '--resume {session_id}',
         sessionIdCapture: {
-          source: 'stdout_regex',
-          pattern: 'Session ID: ([a-f0-9-]+)',
-        },
+          source: 'future_unknown',
+          pattern: '~/.future/{session_id}',
+        } as never,
         yoloArgsTemplate: null,
       },
       '77777777-7777-4777-8777-777777777777',
@@ -244,5 +377,37 @@ describe('claude session support', () => {
       args: ['--dangerously-skip-permissions'],
     })
     expect(result).not.toHaveProperty('resumedSessionId')
+  })
+
+  test('isResumeLaunchConfig detects direct resume args', () => {
+    expect(isResumeLaunchConfig({ command: 'claude', args: ['--resume', 'session-id'] })).toBe(true)
+    expect(isResumeLaunchConfig({ command: 'codex', args: ['resume', 'session-id'] })).toBe(true)
+  })
+
+  test('isResumeLaunchConfig detects shell startup resume commands', () => {
+    expect(
+      isResumeLaunchConfig({
+        command: '/bin/zsh',
+        args: ['-lic', 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19'],
+        interactiveCommand: 'claude',
+      })
+    ).toBe(true)
+    expect(
+      isResumeLaunchConfig({
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', 'claude --continue --label "old session"'],
+        interactiveCommand: 'claude',
+      })
+    ).toBe(true)
+  })
+
+  test('isResumeLaunchConfig does not treat unrelated shell text as this CLI resume', () => {
+    expect(
+      isResumeLaunchConfig({
+        command: '/bin/zsh',
+        args: ['-lic', 'echo --resume'],
+        interactiveCommand: 'claude',
+      })
+    ).toBe(false)
   })
 })

@@ -118,7 +118,7 @@ afterEach(async () => {
 const openTaskGraph = async () => {
   const drawer = await screen.findByTestId('task-graph-drawer')
   await waitFor(() => {
-    expect(drawer).toHaveAttribute('aria-hidden', 'false')
+    expect(drawer).toBeInTheDocument()
   })
   return drawer
 }
@@ -147,8 +147,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     const drawer = await openTaskGraph()
 
     const summary = await within(drawer).findByTestId('task-graph-summary')
-    expect(summary).toHaveTextContent('2 / 3')
-    expect(summary).toHaveTextContent('67%')
+    expect(summary).toHaveTextContent('2/3')
     expect(within(drawer).getByTestId('task-progress-bar')).toHaveAttribute('aria-valuenow', '67')
     // Owner mentions now render with an AtSign icon + plain name, so match
     // on the name text only (no leading "@" in the DOM).

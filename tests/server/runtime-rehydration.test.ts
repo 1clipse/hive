@@ -1,12 +1,10 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import Database from '../../src/server/sqlite.js'
 
 const tempDirs: string[] = []
 const originalPath = process.env.PATH
@@ -47,8 +45,16 @@ describe('runtime rehydration', () => {
     const firstStore = createRuntimeStore({ dataDir })
     stores.push(firstStore)
     const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const bob = firstStore.addWorker(workspace.id, { name: 'Bob', role: 'tester' })
+    const alice = firstStore.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+      description: 'User chosen implementation scope',
+    })
+    const bob = firstStore.addWorker(workspace.id, {
+      name: 'Bob',
+      role: 'tester',
+      description: 'User chosen validation scope',
+    })
 
     firstStore.dispatchTask(workspace.id, alice.id, 'Implement login')
     firstStore.dispatchTask(workspace.id, bob.id, 'Write tests')
@@ -62,6 +68,7 @@ describe('runtime rehydration', () => {
         id: alice.id,
         name: 'Alice',
         role: 'coder',
+        description: 'User chosen implementation scope',
         status: 'stopped',
         pendingTaskCount: 1,
       },
@@ -69,6 +76,7 @@ describe('runtime rehydration', () => {
         id: bob.id,
         name: 'Bob',
         role: 'tester',
+        description: 'User chosen validation scope',
         status: 'stopped',
         pendingTaskCount: 0,
       },

@@ -9,7 +9,7 @@ test('WelcomePane renders 3-step guide and fires onAddWorkspace from CTA', () =>
   const onAdd = vi.fn()
   render(<WelcomePane onAddWorkspace={onAdd} />)
   expect(screen.getByText(/add a workspace/i)).toBeInTheDocument()
-  expect(screen.getByText(/choose an orchestrator/i)).toBeInTheDocument()
+  expect(screen.getByText(/choose where to coordinate/i)).toBeInTheDocument()
   expect(screen.getByText(/dispatch tasks/i)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
   expect(onAdd).toHaveBeenCalledOnce()

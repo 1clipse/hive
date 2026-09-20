@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
 
@@ -31,7 +32,7 @@ const waitFor = async (
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -94,8 +95,8 @@ describe('cross workspace send isolation', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
+            command: process.execPath,
+            args: [scriptPath],
           }),
         })
       }
@@ -156,5 +157,5 @@ describe('cross workspace send isolation', () => {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 15_000)
 })

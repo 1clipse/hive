@@ -1,0 +1,52 @@
+# Hive remote-access gateway. Public source, separate deployment, never in npm tarball.
+# Self-hosters must replace routes, GATEWAY_ORIGIN and the D1 binding with their own.
+# Secrets (GITHUB_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, JWT_SIGNING_SECRET) are set via
+# `wrangler secret put` (prod) or gateway/.dev.vars (local dev, gitignored) — never in this file.
+name = "hive-gateway"
+main = "src/index.ts"
+compatibility_date = "2025-09-06"
+
+# Custom domain — app.hivehq.dev (must match GATEWAY_ORIGIN + the OAuth callback URLs).
+routes = [{ pattern = "app.hivehq.dev", custom_domain = true }]
+
+# Non-secret production config (the worker reads these off c.env; src/env.ts). Secrets
+# (GITHUB/GOOGLE client id+secret, JWT_SIGNING_SECRET) go via `wrangler secret put`, never here.
+# GATEWAY_ORIGIN is the OAuth redirect_uri base + open-redirect allowlist root — it MUST equal
+# the custom domain attached below and the OAuth callback URLs registered with GitHub/Google.
+[vars]
+GATEWAY_ORIGIN = "https://app.hivehq.dev"
+GITHUB_OAUTH_BASE = "https://github.com/login/oauth"
+GITHUB_API_BASE = "https://api.github.com"
+GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+GOOGLE_ISSUER = "https://accounts.google.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hive-gateway"
+database_id = "39f9e8a7-4b98-4f57-8a05-fbe3e91c44e0"
+migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDO"
+
+# Sliding-window rate limiter — per-key DO (login / approve / code-exchange). Not yet deployed, so it
+# rides the same v1 migration tag as RelayDO (one tag, both new_sqlite_classes — legal pre-deploy).
+[[durable_objects.bindings]]
+name = "RATELIMIT"
+class_name = "RateLimitDO"
+
+# R2 bundle store (DISABLED — Plan B): R2 isn't activated on this account, so the worker ships the
+# real bundle bytes IN-PROCESS (gateway/src/bundle-assets.generated.ts, written by `ship-bundle --bake`)
+# and serves them re-verified against the anchored manifest. To switch to the cloud-native R2 path
+# later: enable R2 in the dashboard, `wrangler r2 bucket create hive-gateway-assets`, re-add the
+# binding below, and re-ship WITHOUT --bake (so bytes go to R2 instead of the worker).
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "hive-gateway-assets"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDO", "RateLimitDO"]

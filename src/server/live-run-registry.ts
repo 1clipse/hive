@@ -3,6 +3,7 @@ import type { LiveAgentRun } from './agent-runtime-types.js'
 export interface RunExitEntry {
   promise: Promise<void>
   resolve: () => void
+  runId: string
 }
 
 export interface LiveRunRegistry {
@@ -35,7 +36,7 @@ export const createLiveRunRegistry = (): LiveRunRegistry => {
       const promise = new Promise<void>((nextResolve) => {
         resolve = nextResolve
       })
-      runExitPromises.set(runId, { promise, resolve })
+      runExitPromises.set(runId, { promise, resolve, runId })
     },
     deleteExitEntry(runId) {
       runExitPromises.delete(runId)

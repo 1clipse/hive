@@ -7,7 +7,10 @@ import { I18nProvider } from '../../web/src/i18n.js'
 import { Toaster } from '../../web/src/ui/toast.js'
 import { ToastProvider } from '../../web/src/ui/useToast.js'
 import { OpenWorkspaceButton } from '../../web/src/workspace/OpenWorkspaceButton.js'
-import { PREFERRED_OPEN_TARGET_STORAGE_KEY } from '../../web/src/workspace/open-targets.js'
+import {
+  getOpenTargetOption,
+  PREFERRED_OPEN_TARGET_STORAGE_KEY,
+} from '../../web/src/workspace/open-targets.js'
 
 const renderHarness = (children: ReactNode) =>
   render(
@@ -67,6 +70,15 @@ afterEach(() => {
 })
 
 describe('OpenWorkspaceButton', () => {
+  test('Windows file manager target uses a File Explorer icon instead of the mac Finder icon', () => {
+    const macFinder = getOpenTargetOption('finder', 'mac')
+    const windowsExplorer = getOpenTargetOption('finder', 'windows')
+
+    expect(windowsExplorer.labelKey).toBe('openWorkspace.target.finder.windows')
+    expect(windowsExplorer.iconSrc).not.toBe(macFinder.iconSrc)
+    expect(windowsExplorer.iconSrc).toMatch(/^data:image\/svg\+xml/)
+  })
+
   test('main click POSTs target_id to /api/workspaces/:id/open and skips toast on 200', async () => {
     const calls = stubOpenFetch(() => json({ ok: true, effective_target_id: 'finder' }, 200))
 

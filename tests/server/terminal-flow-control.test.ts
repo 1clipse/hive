@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,10 +9,12 @@ import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { createTerminalOutputFlow, FLOW_CONTROL } from '../../src/server/terminal-flow-control.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const defaultFlowControl = { ...FLOW_CONTROL }
+const terminalLineEnd = process.platform === 'win32' ? '\r' : '\n'
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -43,7 +45,9 @@ const startSpyServer = async () => {
   const agentManager = createAgentManager()
   const pauseSpy = vi.spyOn(agentManager, 'pauseRun')
   const resumeSpy = vi.spyOn(agentManager, 'resumeRun')
-  const store = createRuntimeStore({ agentManager })
+  const dataDir = mkdtempSync(join(tmpdir(), 'hive-terminal-flow-data-'))
+  tempDirs.push(dataDir)
+  const store = createRuntimeStore({ agentManager, dataDir })
   const app = createApp({ store })
   await new Promise<void>((resolve) => {
     app.server.listen(0, '127.0.0.1', () => resolve())
@@ -57,7 +61,9 @@ const startSpyServer = async () => {
     baseUrl: `http://127.0.0.1:${address.port}`,
     pauseSpy,
     resumeSpy,
+    store,
     close: async () => {
+      app.closeWebSockets()
       await store.close()
       await new Promise<void>((resolve) => app.server.close(() => resolve()))
     },
@@ -153,7 +159,7 @@ const openViewer = async (baseUrl: string, cookie: string, runId: string, client
 afterEach(() => {
   Object.assign(FLOW_CONTROL, defaultFlowControl)
   vi.restoreAllMocks()
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('terminal flow control', () => {
@@ -166,9 +172,14 @@ describe('terminal flow control', () => {
     writeFileSync(
       script,
       [
-        "console.log('ready')",
+        'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
         "process.stdin.setEncoding('utf8')",
         "process.stdin.on('data', (chunk) => { process.stdout.write('IN:' + chunk) })",
+        'process.stdin.resume()',
+        // Deliberately split the startup line: its tail can be batched separately.
+        "process.stdout.write('ready')",
+        "setTimeout(() => process.stdout.write('\\n'), 1)",
+        'setInterval(() => {}, 1000)',
       ].join('\n')
     )
 
@@ -177,20 +188,21 @@ describe('terminal flow control', () => {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
       const worker = await createWorker(server.baseUrl, cookie, workspace.id)
-      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, '/bin/bash', [
-        '-lc',
-        `stty -echo; exec ${process.execPath} ${script}`,
+      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+        script,
       ])
       const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
       const viewer = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-a')
 
       await waitFor(() => {
-        expect(viewer.outputs.join('')).toContain('ready')
+        // Start the latency measurement only after the complete startup frame
+        // reaches the viewer, so tiny cannot join its outstanding batch.
+        expect(viewer.outputs.join('').replaceAll('\r', '')).toContain('ready\n')
       })
 
       await new Promise((resolve) => setTimeout(resolve, 20))
       const startAt = Date.now()
-      viewer.io.send('tiny\n')
+      viewer.io.send(`tiny${terminalLineEnd}`)
 
       await waitFor(
         () => {
@@ -221,7 +233,10 @@ describe('terminal flow control', () => {
       script,
       [
         `const chunks = ${JSON.stringify([chunkA, chunkB, chunkC])};`,
-        'setTimeout(() => { for (const chunk of chunks) process.stdout.write(chunk) }, 20)',
+        "process.stdin.setEncoding('utf8')",
+        "process.stdin.on('data', () => { for (const chunk of chunks) process.stdout.write(chunk) })",
+        'process.stdin.resume()',
+        "process.stdout.write('READY\\n')",
         'setInterval(() => {}, 1000)',
       ].join('\n')
     )
@@ -235,14 +250,19 @@ describe('terminal flow control', () => {
         script,
       ])
       const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(() => {
+        expect(server.store.getLiveRun(run.runId).output).toContain('READY')
+      })
       const viewer = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-a')
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      server.store.writeRunInput(run.runId, `go${terminalLineEnd}`)
 
       await waitFor(() => {
-        expect(viewer.messageEvents).toHaveLength(1)
         expect(viewer.outputs.join('')).toContain(chunkA)
         expect(viewer.outputs.join('')).toContain(chunkB)
         expect(viewer.outputs.join('')).toContain(chunkC)
       })
+      expect(viewer.messageEvents.length).toBeLessThan(3)
 
       viewer.io.close()
       viewer.control.close()

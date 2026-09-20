@@ -8,6 +8,7 @@ export interface MessageKindRecord {
 }
 
 export interface WorkspaceRow {
+  controller_mode: 'internal' | 'codex_app'
   id: string
   name: string
   path: string
@@ -19,6 +20,9 @@ export interface WorkerRow {
   name: string
   description: string | null
   role: WorkerRole
+  avatar?: string | null
+  ephemeral: number
+  spawned_by: string | null
 }
 
 export interface WorkspaceSummaryRow extends WorkspaceRow {}
@@ -35,10 +39,24 @@ export const createOrchestrator = (workspaceId: string): AgentSummary => ({
   pendingTaskCount: 0,
 })
 
+export const getWorkflowAgentId = (workspaceId: string) => `${workspaceId}:__workflow__`
+
+// In-memory pseudo-agent (no DB row, no PTY) that gives the deterministic
+// workflow runner a dispatch identity — mirrors the orchestrator pseudo-agent.
+export const createWorkflowAgent = (workspaceId: string): AgentSummary => ({
+  id: getWorkflowAgentId(workspaceId),
+  workspaceId,
+  name: 'Workflow',
+  description: 'Hive workflow runner — deterministic multi-agent orchestration driver.',
+  role: 'workflow',
+  status: 'stopped',
+  pendingTaskCount: 0,
+})
+
 export const isWorkerAgent = (
   agent: AgentSummary
 ): agent is AgentSummary & { role: WorkerRole } => {
-  return agent.role !== 'orchestrator'
+  return agent.role !== 'orchestrator' && agent.role !== 'workflow'
 }
 
 export const getStatusFromPendingCount = (pendingTaskCount: number): AgentStatus => {

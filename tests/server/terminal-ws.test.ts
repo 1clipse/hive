@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,11 +8,11 @@ import WebSocket from 'ws'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { openRawWebSocket, writeRsv2Rsv3MalformedFrame } from '../helpers/raw-websocket.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
-const restoreEnv: Array<[string, string | undefined]> = []
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -123,20 +123,8 @@ const startAgent = async (
 
 afterEach(() => {
   vi.restoreAllMocks()
-  while (restoreEnv.length > 0) {
-    const [key, value] = restoreEnv.pop() ?? ['', undefined]
-    if (!key) continue
-    if (value === undefined) delete process.env[key]
-    else process.env[key] = value
-  }
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
-
-const setEnv = (key: string, value: string | undefined) => {
-  restoreEnv.push([key, process.env[key]])
-  if (value === undefined) delete process.env[key]
-  else process.env[key] = value
-}
 
 describe('terminal websocket server', () => {
   test('streams PTY output over the io socket', async () => {
@@ -213,7 +201,7 @@ describe('terminal websocket server', () => {
       io.on('message', (chunk) => {
         received.push(chunk.toString())
       })
-      io.send('hello from terminal\n')
+      io.send(`hello from terminal${process.platform === 'win32' ? '\r' : '\n'}`)
 
       await waitFor(() => {
         expect(received.join('')).toContain('IN:hello from terminal')
@@ -235,14 +223,17 @@ describe('terminal websocket server', () => {
       [
         'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
         'process.stdin.resume()',
+        "const ready = setInterval(() => console.log('READY'), 100)",
         "console.log('READY')",
         "process.stdin.on('data', (chunk) => {",
+        '  clearInterval(ready)',
         "  process.stdout.write('HEX:' + chunk.toString('hex') + '\\n')",
         '})',
       ].join('\n')
     )
 
     const server = await startTestServer()
+    let io: WebSocket | undefined
     try {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
@@ -251,7 +242,7 @@ describe('terminal websocket server', () => {
         script,
       ])
       const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
-      const io = await openSocket(toWsUrl(server.baseUrl, `/ws/terminal/${run.runId}/io`), cookie)
+      io = await openSocket(toWsUrl(server.baseUrl, `/ws/terminal/${run.runId}/io`), cookie)
       const received: string[] = []
 
       io.on('message', (chunk) => {
@@ -260,15 +251,57 @@ describe('terminal websocket server', () => {
 
       await waitFor(() => {
         expect(received.join('')).toContain('READY')
-      })
-      io.send(Buffer.from([0x1b, 0x5b, 0x4d, 0xc8, 0x21, 0x21]))
+      }, 10000)
+      // Non-control high-bit bytes catch accidental UTF-8 text decoding
+      // without triggering Windows ConPTY escape-sequence handling.
+      io.send(Buffer.from([0xc3, 0xa9, 0x21]))
 
       await waitFor(() => {
-        expect(received.join('')).toContain('HEX:1b5b4dc82121')
-      })
+        expect(received.join('')).toContain('HEX:c383c2a921')
+      }, 10000)
 
       io.close()
     } finally {
+      io?.close()
+      await server.close()
+    }
+  }, 60000)
+
+  test('malformed established websocket frames are handled without crashing the runtime', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const workspacePath = join(tmpdir(), `hive-terminal-malformed-ws-${Date.now()}`)
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(workspacePath)
+    const script = join(workspacePath, 'idle.js')
+    writeFileSync(script, "process.stdout.write('ready\\n'); setInterval(() => {}, 1000)\n")
+
+    const server = await startTestServer()
+    let rawSocket: Awaited<ReturnType<typeof openRawWebSocket>> | undefined
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorker(server.baseUrl, cookie, workspace.id)
+      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+        script,
+      ])
+      const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
+      rawSocket = await openRawWebSocket(server.baseUrl, `/ws/terminal/${run.runId}/io`, cookie)
+
+      writeRsv2Rsv3MalformedFrame(rawSocket)
+
+      await waitFor(() => {
+        expect(consoleError).toHaveBeenCalledWith(
+          expect.stringContaining(`terminal ${run.runId} io websocket error`),
+          expect.objectContaining({
+            code: 'WS_ERR_UNEXPECTED_RSV_2_3',
+            message: 'Invalid WebSocket frame: RSV2 and RSV3 must be clear',
+          })
+        )
+      })
+      const response = await fetch(`${server.baseUrl}/api/ui/session`)
+      expect(response.status).toBe(200)
+    } finally {
+      rawSocket?.destroy()
       await server.close()
     }
   }, 60000)
@@ -356,10 +389,9 @@ describe('terminal websocket server', () => {
       const cookie = await getUiCookie(baseUrl)
       const workspace = await createWorkspace(baseUrl, cookie, workspacePath)
       const worker = await createWorker(baseUrl, cookie, workspace.id)
-      await configureAgent(baseUrl, cookie, workspace.id, worker.id, '/bin/bash', [
-        '-lc',
-        "trap 'stty size' WINCH; echo ready; while true; do sleep 1; done",
-      ])
+      const script = join(workspacePath, 'resize-idle.js')
+      writeFileSync(script, "process.stdout.write('ready\\n'); setInterval(() => {}, 1000)\n")
+      await configureAgent(baseUrl, cookie, workspace.id, worker.id, process.execPath, [script])
       const run = await startAgent(baseUrl, cookie, workspace.id, worker.id)
       const control = await openSocket(
         toWsUrl(baseUrl, `/ws/terminal/${run.runId}/control`),
@@ -371,6 +403,57 @@ describe('terminal websocket server', () => {
         expect(resizeSpy).toHaveBeenCalledWith(run.runId, 120, 40)
       })
 
+      control.close()
+    } finally {
+      await store.close()
+      await new Promise<void>((resolve) => app.server.close(() => resolve()))
+    }
+  })
+
+  test('rejects invalid resize dimensions before reaching the PTY manager', async () => {
+    const workspacePath = join(tmpdir(), `hive-terminal-bad-resize-${Date.now()}`)
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(workspacePath)
+
+    const agentManager = createAgentManager()
+    const resizeSpy = vi.spyOn(agentManager, 'resizeRun')
+    const store = createRuntimeStore({ agentManager })
+    const app = createApp({ store })
+    await new Promise<void>((resolve) => {
+      app.server.listen(0, '127.0.0.1', () => resolve())
+    })
+    const address = app.server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Server did not bind to an inet port')
+    }
+    const baseUrl = `http://127.0.0.1:${address.port}`
+
+    try {
+      const cookie = await getUiCookie(baseUrl)
+      const workspace = await createWorkspace(baseUrl, cookie, workspacePath)
+      const worker = await createWorker(baseUrl, cookie, workspace.id)
+      const script = join(workspacePath, 'resize-idle.js')
+      writeFileSync(script, "process.stdout.write('ready\\n'); setInterval(() => {}, 1000)\n")
+      await configureAgent(baseUrl, cookie, workspace.id, worker.id, process.execPath, [script])
+      const run = await startAgent(baseUrl, cookie, workspace.id, worker.id)
+      const control = await openSocket(
+        toWsUrl(baseUrl, `/ws/terminal/${run.runId}/control`),
+        cookie
+      )
+      const messages: Array<{ message?: string; type: string }> = []
+      control.on('message', (chunk) => {
+        messages.push(JSON.parse(chunk.toString()) as { message?: string; type: string })
+      })
+
+      control.send(JSON.stringify({ type: 'resize', cols: 0, rows: 40 }))
+
+      await waitFor(() => {
+        expect(messages).toContainEqual({
+          type: 'error',
+          message: 'Invalid terminal control message',
+        })
+      })
+      expect(resizeSpy).not.toHaveBeenCalledWith(run.runId, 0, 40)
       control.close()
     } finally {
       await store.close()
@@ -418,19 +501,10 @@ describe('terminal websocket server', () => {
     const workspacePath = join(tmpdir(), `hive-terminal-shell-exit-${Date.now()}`)
     mkdirSync(workspacePath, { recursive: true })
     tempDirs.push(workspacePath)
-    const fakeShell = join(workspacePath, 'fake-shell')
-    writeFileSync(
-      fakeShell,
-      [
-        '#!/usr/bin/env node',
-        "process.stdout.write('shell ready\\n')",
-        'setTimeout(() => process.exit(0), 150)',
-      ].join('\n')
-    )
-    chmodSync(fakeShell, 0o755)
-    setEnv('SHELL', fakeShell)
 
     const server = await startTestServer()
+    let control: WebSocket | undefined
+    let io: WebSocket | undefined
     try {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
@@ -440,22 +514,27 @@ describe('terminal websocket server', () => {
       )
       expect(startResponse.status).toBe(201)
       const shell = (await startResponse.json()) as { run_id: string }
-      const control = await openSocket(
+      control = await openSocket(
         toWsUrl(server.baseUrl, `/ws/terminal/${shell.run_id}/control`),
         cookie
       )
+      io = await openSocket(toWsUrl(server.baseUrl, `/ws/terminal/${shell.run_id}/io`), cookie)
       const messages: Array<{ code: number | null; type: string }> = []
 
       control.on('message', (chunk) => {
         messages.push(JSON.parse(chunk.toString()) as { code: number | null; type: string })
       })
+      io.send(process.platform === 'win32' ? 'exit\r' : 'exit\n')
 
       await waitFor(() => {
         expect(messages).toContainEqual({ type: 'exit', code: 0 })
       })
 
       control.close()
+      io.close()
     } finally {
+      control?.close()
+      io?.close()
       await server.close()
     }
   })

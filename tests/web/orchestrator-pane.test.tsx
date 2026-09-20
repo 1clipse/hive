@@ -7,31 +7,40 @@ import {
   OrchestratorPane,
   type OrchestratorPaneState,
 } from '../../web/src/worker/OrchestratorPane.js'
+import { renderMobile } from './helpers/mobile-render.js'
 
 afterEach(() => {
   cleanup()
 })
 
-const renderPane = (state: OrchestratorPaneState) => {
-  const onStop = vi.fn()
+const runningState = (
+  overrides: Partial<Extract<OrchestratorPaneState, { kind: 'running' }>> = {}
+): Extract<OrchestratorPaneState, { kind: 'running' }> => ({
+  hasUserInputSinceStart: true,
+  kind: 'running',
+  runId: 'run-abc',
+  startupBlockedReason: null,
+  ...overrides,
+})
+
+const renderPane = (state: OrchestratorPaneState, renderUi = render) => {
   const onStart = vi.fn()
   const onRestart = vi.fn()
   const onRemoveWorkspace = vi.fn()
-  render(
+  renderUi(
     <OrchestratorPane
       state={state}
-      onStop={onStop}
       onStart={onStart}
       onRestart={onRestart}
       onRemoveWorkspace={onRemoveWorkspace}
     />
   )
-  return { onRemoveWorkspace, onStop, onStart, onRestart }
+  return { onRemoveWorkspace, onStart, onRestart }
 }
 
 describe('OrchestratorPane three-state UI', () => {
   test('starting: shows passive startup state without a manual Start Orchestrator CTA', () => {
-    const { onStop, onStart, onRestart } = renderPane({ kind: 'starting' })
+    const { onStart, onRestart } = renderPane({ kind: 'starting' })
 
     expect(screen.getByTestId('orchestrator-starting-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Starting Orchestrator')
@@ -39,13 +48,12 @@ describe('OrchestratorPane three-state UI', () => {
     expect(screen.queryByText('Orchestrator is offline')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
-    expect(onStop).not.toHaveBeenCalled()
     expect(onStart).not.toHaveBeenCalled()
     expect(onRestart).not.toHaveBeenCalled()
   })
 
   test('stopped: shows explicit Start Orchestrator CTA', () => {
-    const { onStop, onStart, onRestart } = renderPane({ kind: 'stopped' })
+    const { onStart, onRestart } = renderPane({ kind: 'stopped' })
 
     expect(screen.getByTestId('orchestrator-stopped-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Orchestrator is stopped')
@@ -54,36 +62,45 @@ describe('OrchestratorPane three-state UI', () => {
 
     fireEvent.click(start)
     expect(onStart).toHaveBeenCalledTimes(1)
-    expect(onStop).not.toHaveBeenCalled()
     expect(onRestart).not.toHaveBeenCalled()
   })
 
-  test('running: PTY slot mounts; no overlay actions or empty bodies render', () => {
-    const { onStop, onStart, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
+  test('running: PTY slot mounts without a visible Stop kill switch or first-dispatch guide', () => {
+    const { onStart, onRestart } = renderPane(runningState({ hasUserInputSinceStart: false }))
 
     // PTY slot must use the run id so TerminalView can portal into it.
     const slot = document.getElementById('orch-pty-run-abc')
     expect(slot).not.toBeNull()
     expect(slot?.getAttribute('data-pty-slot')).toBe('orchestrator')
+    expect(slot?.getAttribute('data-terminal-auto-focus')).toBe('true')
 
-    // Stop / Restart / status pill / overlay are all gone — actions surface
-    // through other channels (M6-B palette / WorkerModal). The pane is just
-    // a PTY in running state.
     expect(screen.queryByTestId('orchestrator-stop')).toBeNull()
     expect(screen.queryByTestId('orchestrator-restart')).toBeNull()
     expect(screen.queryByTestId('orchestrator-running-actions')).toBeNull()
+    expect(screen.queryByTestId('orchestrator-first-dispatch-guide')).toBeNull()
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-stopped-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
-    expect(onStop).not.toHaveBeenCalled()
     expect(onStart).not.toHaveBeenCalled()
     expect(onRestart).not.toHaveBeenCalled()
   })
 
+  test('running: desktop does not render a visible Connecting placeholder before portal attach', () => {
+    renderPane(runningState())
+
+    expect(screen.queryByTestId('orchestrator-running-placeholder')).toBeNull()
+  })
+
+  test('running: mobile keeps the temporary Connecting placeholder for first attach', () => {
+    renderPane(runningState(), renderMobile)
+
+    expect(screen.getByTestId('orchestrator-running-placeholder')).toHaveTextContent('Connecting')
+  })
+
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {
     const errorMessage = 'claude CLI not found in PATH'
-    const { onRemoveWorkspace, onStop, onStart, onRestart } = renderPane({
+    const { onRemoveWorkspace, onStart, onRestart } = renderPane({
       kind: 'failed',
       error: errorMessage,
     })
@@ -98,7 +115,6 @@ describe('OrchestratorPane three-state UI', () => {
     fireEvent.click(retryBody)
     expect(onRestart).toHaveBeenCalledTimes(1)
     expect(onStart).not.toHaveBeenCalled()
-    expect(onStop).not.toHaveBeenCalled()
 
     const remove = screen.getByTestId('orchestrator-remove-workspace')
     expect(remove).toHaveTextContent('Remove workspace')

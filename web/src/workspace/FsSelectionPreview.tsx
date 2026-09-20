@@ -44,7 +44,10 @@ export const FsSelectionPreview = ({
           value={suggestedName}
           onChange={(event) => onSuggestedNameChange(event.target.value)}
           disabled={!hasProbe}
-          className="mono rounded border px-2 py-1 text-sm text-pri disabled:opacity-50"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="mono rounded border px-2 py-1 text-sm text-pri disabled:opacity-50 max-md:text-base"
           style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
           data-testid="fs-preview-name-input"
         />

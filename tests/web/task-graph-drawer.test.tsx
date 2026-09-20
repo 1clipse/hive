@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { TaskGraphDrawer } from '../../web/src/tasks/TaskGraphDrawer.js'
-import { DEFAULT_WORKERS_PANE_WIDTH } from '../../web/src/usePaneSplit.js'
 
 afterEach(() => cleanup())
 
@@ -32,10 +31,14 @@ const baseProps = () => ({
 })
 
 describe('TaskGraphDrawer layout', () => {
-  test('defaults to the same width as the team members pane', () => {
+  test('renders as a centered viewport-bounded dialog', () => {
     render(<TaskGraphDrawer {...baseProps()} content={'- [ ] task\n'} />)
+    expect(screen.getByRole('dialog', { name: 'Tasks' })).toBe(
+      screen.getByTestId('task-graph-drawer')
+    )
     expect(screen.getByTestId('task-graph-drawer')).toHaveStyle({
-      width: DEFAULT_WORKERS_PANE_WIDTH,
+      height: 'min(720px, calc(100vh - 64px))',
+      width: 'min(700px, calc(100vw - 48px))',
     })
   })
 })
@@ -234,5 +237,46 @@ describe('TaskGraphDrawer §6.6.7 — Esc closes the drawer', () => {
     const input = screen.getByTestId('task-inline-input')
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(props.onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('TaskGraphDrawer empty state — focal CTA', () => {
+  test('hosts the primary add-task CTA *inside* the empty state and wires onAppendTask', () => {
+    const props = baseProps()
+    render(<TaskGraphDrawer {...props} content={''} />)
+
+    const empty = screen.getByTestId('empty-state')
+    const addToggle = screen.getByTestId('task-add-toggle')
+    // Containment, not mere presence: the redesign moves the add affordance
+    // into the empty state as its primary action instead of stranding it at
+    // the top of the dialog. A regression that re-floats it as a sibling above
+    // EmptyState would make `contains` false and fail this — which is the point.
+    expect(empty.contains(addToggle)).toBe(true)
+    expect(addToggle.className).toContain('task-add-toggle--primary')
+
+    fireEvent.click(addToggle)
+    const input = screen.getByTestId('task-add-input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'first task' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(props.onAppendTask).toHaveBeenCalledWith('first task')
+  })
+
+  test('renders no add CTA when onAppendTask is not provided (read-only host)', () => {
+    render(
+      <TaskGraphDrawer
+        content={''}
+        hasConflict={false}
+        open
+        workspacePath="/tmp/ws"
+        onClose={vi.fn()}
+        onContentChange={vi.fn()}
+        onKeepLocal={vi.fn()}
+        onReload={vi.fn()}
+        onSave={vi.fn(async () => {})}
+        onToggleTaskLine={vi.fn()}
+      />
+    )
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+    expect(screen.queryByTestId('task-add-toggle')).toBeNull()
   })
 })

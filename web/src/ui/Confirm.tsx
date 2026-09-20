@@ -33,8 +33,11 @@ export const Confirm = ({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay data-testid="confirm-overlay" className="app-overlay fixed inset-0 z-40" />
-        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+        <Dialog.Overlay
+          data-testid="confirm-overlay"
+          className="app-overlay fixed inset-0 z-[60]"
+        />
+        <div className="pointer-events-none fixed inset-0 z-[70] grid place-items-center p-4">
           <Dialog.Content
             data-testid="confirm-content"
             className="dialog-scale-pop elev-2 pointer-events-auto w-[440px] max-w-[calc(100vw-32px)] rounded-lg border p-5"

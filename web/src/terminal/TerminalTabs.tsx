@@ -41,7 +41,7 @@ export const TerminalTabs = ({
     <div
       role="tablist"
       aria-label={t('terminalPanel.tablistAria')}
-      className="scrollbar-thin flex h-9 min-h-9 w-full items-stretch overflow-x-auto"
+      className="scrollbar-thin flex h-9 min-h-9 w-full items-stretch overflow-x-auto pointer-coarse:h-12 pointer-coarse:min-h-12"
       style={{ background: 'var(--bg-2)', borderBottom: '1px solid var(--border)' }}
       data-testid="terminal-tab-strip"
     >
@@ -96,7 +96,7 @@ export const TerminalTabs = ({
                 aria-label={closeAria}
                 data-testid={`terminal-tab-close-${tab.id}`}
                 onClick={handleClose}
-                className={`mr-1 rounded p-0.5 transition ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`mr-1 rounded p-0.5 pointer-coarse:p-2 transition ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100'}`}
                 style={{ color: 'var(--text-secondary)' }}
               >
                 <X size={12} aria-hidden />
@@ -112,7 +112,7 @@ export const TerminalTabs = ({
             aria-label={t('terminalPanel.closePanel')}
             data-testid="terminal-panel-close"
             onClick={onClosePanel}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-sec transition hover:text-pri disabled:opacity-50"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-sec transition hover:text-pri disabled:opacity-50 pointer-coarse:h-10 pointer-coarse:w-10"
             style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
           >
             <X size={12} aria-hidden />
@@ -125,7 +125,7 @@ export const TerminalTabs = ({
             data-testid="terminal-tab-new-shell"
             onClick={onNewShell}
             disabled={newShellPending}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-sec transition hover:text-pri disabled:opacity-50"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-sec transition hover:text-pri disabled:opacity-50 pointer-coarse:h-10 pointer-coarse:w-10"
             style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
           >
             {newShellPending ? (

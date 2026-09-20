@@ -7,8 +7,10 @@ body:
       value: |
         Thanks for proposing an idea.
 
-        Hive is local-first and deliberately narrow on scope. For larger ideas,
-        please open an issue first to align before sending a PR.
+        Hive is local-first and deliberately narrow on scope — see
+        [`docs/superpowers/specs/2026-04-18-hive-design.md`](../docs/superpowers/specs/2026-04-18-hive-design.md)
+        for what is and isn't currently in MVP. For larger ideas, please open
+        an issue first to align before sending a PR.
   - type: textarea
     id: problem
     attributes:

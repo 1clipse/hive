@@ -1,5 +1,5 @@
 import '../helpers/mock-node-pty.ts'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,8 +7,10 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20) => {
   const deadline = Date.now() + timeoutMs
@@ -27,9 +29,10 @@ const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20)
   throw lastError
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map((store) => store.close()))
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -56,6 +59,7 @@ describe('agent lifecycle (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(firstStore)
     const workspace = firstStore.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = firstStore.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
@@ -71,6 +75,7 @@ describe('agent lifecycle (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(secondStore)
 
     const run = await secondStore.startAgent(workspace.id, orchestrator.id, {
       hivePort: '4010',
@@ -87,7 +92,7 @@ describe('agent lifecycle (unit)', () => {
     expect(liveRun.output).toContain(`PROJECT=${workspace.id}`)
     expect(liveRun.output).toContain(`AGENT=${orchestrator.id}`)
     expect(liveRun.output).toContain('PATH=')
-    expect(liveRun.output).toContain('/dist/bin')
+    expect(liveRun.output).toMatch(/[\\/]dist[\\/]bin/)
 
     expect(persistedRun).toMatchObject({
       agentId: orchestrator.id,
@@ -112,6 +117,7 @@ describe('agent lifecycle (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
@@ -136,7 +142,7 @@ describe('agent lifecycle (unit)', () => {
     await waitFor(() => {
       expect(store.getLiveRun(run.runId).status).toBe('exited')
       expect(store.listAgentRuns(orchestrator.id)[0]?.status).toBe('exited')
-    })
+    }, 5000)
 
     expect(store.listAgentRuns(orchestrator.id)[0]?.pid).toEqual(expect.any(Number))
     expect(store.listAgentRuns(orchestrator.id)[0]?.endedAt).toEqual(expect.any(Number))

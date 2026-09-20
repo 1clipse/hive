@@ -11,11 +11,14 @@ import type { WorkspaceCreateInput } from './workspace-create-input.js'
 type AddWorkspaceDialogProps = {
   /**
    * Discriminator: `idle` = dialog closed; `request-pick` = parent asked us to
-   * open a new flow, we should fire the native picker on mount.
+   * open a new flow. macOS/Linux fire the native picker; Windows opens the
+   * server filesystem browser because the native picker can hide behind Chrome.
    */
   trigger: number
   onClose: () => void
   onCreate: (input: WorkspaceCreateInput) => Promise<unknown> | undefined
+  /** Demo-mode escape hatch shown when no built-in CLI is installed (P0-B1). */
+  onTryDemo?: () => void
 }
 
 type Stage =
@@ -34,7 +37,28 @@ const chooseDefaultCommandPresetId = (presets: CommandPreset[]) =>
       presets[0]?.id ??
       DEFAULT_COMMAND_PRESET_ID)
 
-export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceDialogProps) => {
+type NavigatorWithUserAgentData = Pick<Navigator, 'platform' | 'userAgent'> & {
+  userAgentData?: { platform?: string }
+}
+
+export const prefersServerBrowseDefault = (
+  nav: NavigatorWithUserAgentData | undefined = typeof navigator === 'undefined'
+    ? undefined
+    : navigator
+): boolean => {
+  if (!nav) return false
+  const signals = [nav.userAgentData?.platform, nav.platform, nav.userAgent]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' ')
+  return /\bWindows?\b|\bWin(?:32|64|CE)\b|Windows NT/i.test(signals)
+}
+
+export const AddWorkspaceDialog = ({
+  trigger,
+  onClose,
+  onCreate,
+  onTryDemo,
+}: AddWorkspaceDialogProps) => {
   const { t } = useI18n()
   // Effect-stable view of `t`: writing to a ref lets the trigger-driven
   // useEffect read the current translator without re-running each render
@@ -89,6 +113,12 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
         setCommandPresetId(DEFAULT_COMMAND_PRESET_ID)
         setCommandPresetError(errorMessage)
       })
+    if (prefersServerBrowseDefault()) {
+      setStage({ kind: 'browse' })
+      return () => {
+        cancelled = true
+      }
+    }
     setStage({ kind: 'picking' })
     pickFolder()
       .then(async (result) => {
@@ -135,6 +165,16 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     setStage({ kind: 'idle' })
     onClose()
   }
+
+  // Close the dialog before flipping into demo mode so the overlay does not
+  // linger on top of the demo workspace view.
+  const handleTryDemo = onTryDemo
+    ? () => {
+        setStage({ kind: 'idle' })
+        onClose()
+        onTryDemo()
+      }
+    : undefined
 
   const handleCreate = (input: WorkspaceCreateInput) => {
     void Promise.resolve(onCreate(input))
@@ -276,6 +316,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
       onCommandPresetChange={handleCommandPresetChange}
       onCreate={handleCreate}
       onOpenServerBrowse={() => setStage({ kind: 'browse' })}
+      {...(handleTryDemo ? { onTryDemo: handleTryDemo } : {})}
     />
   )
 }

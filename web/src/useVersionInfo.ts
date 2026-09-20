@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 
 import { getVersionInfo, type VersionInfo } from './api.js'
 
-export const useVersionInfo = (provided?: VersionInfo): VersionInfo | null => {
+export const useVersionInfo = (provided?: VersionInfo | null): VersionInfo | null => {
   const [loaded, setLoaded] = useState<VersionInfo | null>(null)
 
   useEffect(() => {
-    if (provided) return
+    if (provided !== undefined) return
     let alive = true
     getVersionInfo()
       .then((info) => {
@@ -20,5 +20,5 @@ export const useVersionInfo = (provided?: VersionInfo): VersionInfo | null => {
     }
   }, [provided])
 
-  return provided ?? loaded
+  return provided === undefined ? loaded : provided
 }

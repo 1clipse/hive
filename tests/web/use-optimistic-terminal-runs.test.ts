@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { describe, expect, test } from 'vitest'
 
+import type { TeamListItem } from '../../src/shared/types.js'
 import type { TerminalRunSummary } from '../../web/src/api.js'
 import {
   mergeTerminalRuns,
@@ -16,8 +17,12 @@ const terminalRun = (runId: string, agentId: string, agentName = 'Shell'): Termi
   status: 'running',
 })
 
-afterEach(() => {
-  vi.useRealTimers()
+const worker = (id: string, status: TeamListItem['status']): TeamListItem => ({
+  id,
+  name: id,
+  pendingTaskCount: 0,
+  role: 'coder',
+  status,
 })
 
 describe('mergeTerminalRuns', () => {
@@ -84,25 +89,30 @@ describe('useOptimisticTerminalRuns', () => {
     expect(result.current.terminalRuns).toEqual([])
   })
 
-  test('expires an optimistic workspace shell run that polling never confirms', () => {
-    vi.useFakeTimers()
-    const { result } = renderHook(() => useOptimisticTerminalRuns('ws-1', []))
+  test('keeps an unconfirmed optimistic workspace shell run until explicit lifecycle cleanup', () => {
+    const { rerender, result } = renderHook(
+      ({ actualRuns }) => useOptimisticTerminalRuns('ws-1', actualRuns),
+      { initialProps: { actualRuns: [] as TerminalRunSummary[] } }
+    )
 
     act(() => {
       result.current.recordOptimisticRun({
         agentId: 'ws-1:shell',
         agentName: 'Shell',
-        runId: 'fast-exit-shell-run',
+        runId: 'slow-shell-run',
         workspaceId: 'ws-1',
       })
     })
-    expect(result.current.terminalRuns.map((run) => run.run_id)).toEqual(['fast-exit-shell-run'])
+    expect(result.current.terminalRuns.map((run) => run.run_id)).toEqual(['slow-shell-run'])
+
+    rerender({ actualRuns: [] })
+
+    expect(result.current.terminalRuns.map((run) => run.run_id)).toEqual(['slow-shell-run'])
 
     act(() => {
-      vi.advanceTimersByTime(5000)
+      result.current.forgetOptimisticRun('ws-1', 'slow-shell-run')
     })
 
-    expect(result.current.optimisticRunsByWorkspaceId['ws-1']).toEqual([])
     expect(result.current.terminalRuns).toEqual([])
   })
 
@@ -136,5 +146,53 @@ describe('useOptimisticTerminalRuns', () => {
     await waitFor(() => {
       expect(result.current.terminalRuns).toEqual([])
     })
+  })
+
+  test('drops an optimistic worker run once polling observes a real run for the same agent', async () => {
+    const actualWorkerRun = terminalRun('worker-run-actual', 'worker-1', 'Alice')
+    const { rerender, result } = renderHook(
+      ({ actualRuns }) => useOptimisticTerminalRuns('ws-1', actualRuns),
+      { initialProps: { actualRuns: [] as TerminalRunSummary[] } }
+    )
+
+    act(() => {
+      result.current.recordOptimisticRun({
+        agentId: 'worker-1',
+        agentName: 'Alice',
+        runId: 'worker-run-pending',
+        workspaceId: 'ws-1',
+      })
+    })
+
+    rerender({ actualRuns: [actualWorkerRun] })
+
+    await waitFor(() => {
+      expect(result.current.optimisticRunsByWorkspaceId['ws-1']).toEqual([])
+    })
+    expect(result.current.terminalRuns).toEqual([actualWorkerRun])
+  })
+
+  test('drops an optimistic worker run when worker polling reports stopped with no actual run', async () => {
+    const { rerender, result } = renderHook(
+      ({ workers }) => useOptimisticTerminalRuns('ws-1', [], workers),
+      { initialProps: { workers: [worker('worker-1', 'idle')] } }
+    )
+
+    act(() => {
+      result.current.recordOptimisticRun({
+        agentId: 'worker-1',
+        agentName: 'Alice',
+        runId: 'worker-run-1',
+        workspaceId: 'ws-1',
+      })
+    })
+    expect(result.current.terminalRuns.map((run) => run.run_id)).toEqual(['worker-run-1'])
+
+    rerender({ workers: [worker('worker-1', 'stopped')] })
+
+    await waitFor(() => {
+      expect(result.current.optimisticRunsByWorkspaceId['ws-1']).toEqual([])
+    })
+    expect(result.current.terminalRuns).toEqual([])
   })
 })

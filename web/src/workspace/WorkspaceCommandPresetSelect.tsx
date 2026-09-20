@@ -4,6 +4,39 @@ import { useEffect, useRef, useState } from 'react'
 import type { CommandPreset } from '../api.js'
 import { useI18n } from '../i18n.js'
 
+const CLI_ICON_MAP: Record<string, string> = {
+  claude: '/cli-icons/claude.png',
+  codex: '/cli-icons/codex.png',
+  opencode: '/cli-icons/opencode.svg',
+  gemini: '/cli-icons/gemini.png',
+  hermes: '/cli-icons/hermes.png',
+  qwen: '/cli-icons/qwen.png',
+  pi: '/cli-icons/pi.svg',
+  agy: '/cli-icons/agy.png',
+  cursor: '/cli-icons/cursor.ico',
+  grok: '/cli-icons/grok.ico',
+}
+
+/**
+ * Renders a preset logo with an error fallback to Lucide Terminal.
+ * For opencode, adds a light background for high contrast in dark mode (spec §6.3).
+ */
+const PresetIcon = ({ id, className }: { id: string; className?: string }) => {
+  const [error, setError] = useState(false)
+  const logoSrc = CLI_ICON_MAP[id]
+  if (logoSrc && !error) {
+    return (
+      <img
+        src={logoSrc}
+        alt=""
+        onError={() => setError(true)}
+        className={`${className} object-contain rounded-xs ${id === 'opencode' ? 'bg-[#ebebeb] p-[1px]' : ''}`}
+      />
+    )
+  }
+  return <Terminal size={14} className={className} />
+}
+
 type WorkspaceCommandPresetSelectProps = {
   error: string | null
   onChange: (value: string) => void
@@ -61,7 +94,7 @@ export const WorkspaceCommandPresetSelect = ({
         {t('workspace.preset.label')}
       </span>
       <div ref={containerRef} className="cli-select group relative">
-        <Terminal size={14} aria-hidden className="cli-select__leading" />
+        <PresetIcon id={value} className="cli-select__leading w-3.5 h-3.5" />
         <button
           type="button"
           aria-haspopup="listbox"
@@ -105,6 +138,7 @@ export const WorkspaceCommandPresetSelect = ({
                     className="cli-select__check"
                     style={{ opacity: isSelected ? 1 : 0 }}
                   />
+                  <PresetIcon id={preset.id} className="w-3.5 h-3.5 text-ter shrink-0" />
                   <span>
                     {preset.displayName}
                     {isUnavailable ? t('workspace.preset.notFoundSuffix') : ''}
@@ -129,6 +163,7 @@ export const WorkspaceCommandPresetSelect = ({
                 className="cli-select__check"
                 style={{ opacity: genericSelected ? 1 : 0 }}
               />
+              <Terminal size={14} className="text-ter shrink-0" />
               <span>{t('workspace.preset.generic')}</span>
             </button>
           </div>

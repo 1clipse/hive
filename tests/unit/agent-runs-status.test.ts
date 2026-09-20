@@ -60,7 +60,11 @@ describe('agent run status model (unit)', () => {
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
-          { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: { command: process.execPath, args: [] },
+          },
         ],
         deleteLaunchConfig: () => {},
         markUnfinishedRunsStale: () => {},

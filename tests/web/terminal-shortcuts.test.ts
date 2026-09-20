@@ -17,6 +17,56 @@ const ev = (
     shiftKey: modifiers.shift ?? false,
   })
 
+describe('resolveTerminalShortcut — Windows/Linux Ctrl+C copy', () => {
+  test('Ctrl+C with a selection copies instead of sending \\x03', () => {
+    const action = resolveTerminalShortcut(ev('keydown', 'c', { ctrl: true }), {
+      isMac: false,
+      hasSelection: true,
+    })
+    expect(action).toEqual({ kind: 'copy' })
+  })
+
+  test('Ctrl+C with no selection passes through so xterm still interrupts', () => {
+    const action = resolveTerminalShortcut(ev('keydown', 'c', { ctrl: true }), {
+      isMac: false,
+      hasSelection: false,
+    })
+    expect(action).toEqual({ kind: 'passthrough' })
+  })
+
+  test('capslock-uppercased Ctrl+C (no shift) with a selection still copies', () => {
+    const action = resolveTerminalShortcut(ev('keydown', 'C', { ctrl: true }), {
+      isMac: false,
+      hasSelection: true,
+    })
+    expect(action).toEqual({ kind: 'copy' })
+  })
+
+  test('Ctrl+Shift+C with a selection does not copy here (reserved for the shell)', () => {
+    const action = resolveTerminalShortcut(ev('keydown', 'C', { ctrl: true, shift: true }), {
+      isMac: false,
+      hasSelection: true,
+    })
+    expect(action).toEqual({ kind: 'passthrough' })
+  })
+
+  test('macOS Ctrl+C with a selection still interrupts (copy is Cmd+C there)', () => {
+    const action = resolveTerminalShortcut(ev('keydown', 'c', { ctrl: true }), {
+      isMac: true,
+      hasSelection: true,
+    })
+    expect(action).toEqual({ kind: 'passthrough' })
+  })
+
+  test('keyup of Ctrl+C with a selection passes through (copy fires once, on keydown)', () => {
+    const action = resolveTerminalShortcut(ev('keyup', 'c', { ctrl: true }), {
+      isMac: false,
+      hasSelection: true,
+    })
+    expect(action).toEqual({ kind: 'passthrough' })
+  })
+})
+
 describe('resolveTerminalShortcut — cross-platform Shift+Enter', () => {
   test('emits CSI u sequence on keypress', () => {
     const action = resolveTerminalShortcut(ev('keypress', 'Enter', { shift: true }))

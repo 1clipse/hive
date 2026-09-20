@@ -1,5 +1,5 @@
 import '../helpers/mock-node-pty.ts'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,9 +7,11 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
-const servers: Array<{ close: () => void }> = []
+const servers: Array<{ close: (callback?: (error?: Error) => void) => unknown }> = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20) => {
   const deadline = Date.now() + timeoutMs
@@ -28,13 +30,22 @@ const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20)
   throw lastError
 }
 
-afterEach(() => {
+afterEach(async () => {
   while (servers.length > 0) {
-    servers.pop()?.close()
+    const server = servers.pop()
+    if (server) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error?: Error) => (error ? reject(error) : resolve()))
+      })
+    }
+  }
+
+  while (stores.length > 0) {
+    await stores.pop()?.close()
   }
 
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -60,6 +71,7 @@ describe('team runtime flow (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
@@ -72,8 +84,8 @@ describe('team runtime flow (unit)', () => {
       args: [workerScript],
     })
     store.configureAgentLaunch(workspace.id, orchestrator.id, {
-      command: '/bin/bash',
-      args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+      command: process.execPath,
+      args: ['-e', 'process.stdin.resume()'],
     })
 
     await store.startAgent(workspace.id, worker.id, {
@@ -148,6 +160,7 @@ describe('team runtime flow (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
@@ -160,8 +173,8 @@ describe('team runtime flow (unit)', () => {
       args: [orchestratorScript],
     })
     store.configureAgentLaunch(workspace.id, worker.id, {
-      command: '/bin/bash',
-      args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+      command: process.execPath,
+      args: ['-e', 'process.stdin.resume()'],
     })
 
     await store.startAgent(workspace.id, orchestrator.id, {

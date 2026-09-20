@@ -61,6 +61,7 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
         command: input.command,
         args: input.args ?? [],
         commandPresetId: input.commandPresetId ?? null,
+        cwd: input.cwd ?? null,
         interactiveCommand: input.interactiveCommand ?? null,
         presetAugmentationDisabled: input.presetAugmentationDisabled ?? false,
         resumeArgsTemplate: input.resumeArgsTemplate ?? null,

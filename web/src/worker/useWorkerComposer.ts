@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-
+import { generateWorkerName } from '../../../src/shared/random-worker-name.js'
 import type { TeamListItem, WorkerRole } from '../../../src/shared/types.js'
 import {
   type CommandPreset,
@@ -11,7 +11,6 @@ import {
 } from '../api.js'
 import { useI18n } from '../i18n.js'
 import type { UiLanguage } from '../uiLanguage.js'
-import { generateWorkerName } from './randomWorkerName.js'
 import type { WorkerActions } from './useWorkerActions.js'
 
 interface UseWorkerComposerInput {
@@ -21,6 +20,7 @@ interface UseWorkerComposerInput {
 }
 
 export interface WorkerComposerState {
+  avatar: string | null
   commandPresets: CommandPreset[]
   commandPresetId: string
   createWorkerError: string | null
@@ -35,6 +35,7 @@ export interface WorkerComposerState {
   workerName: string
   workerRole: WorkerRole
   setCommandPresetId: (value: string) => void
+  setAvatar: (value: string | null) => void
   setRoleDescription: (value: string) => void
   setStartupCommand: (value: string) => void
   setWorkerName: (value: string) => void
@@ -125,10 +126,10 @@ const getDefaultDescription = (
   roleTemplates: RoleTemplate[],
   language: UiLanguage
 ) =>
-  language === 'zh'
-    ? (roleTemplates.find((template) => template.roleType === role)?.description ??
-      fallbackRoleDescriptions.zh[role])
-    : fallbackRoleDescriptions.en[role]
+  role === 'custom'
+    ? (roleTemplates.find((template) => template.roleType === 'custom' && template.isBuiltin)
+        ?.description ?? fallbackRoleDescriptions[language].custom)
+    : fallbackRoleDescriptions[language][role]
 
 export const useWorkerComposer = ({
   createWorker,
@@ -147,11 +148,16 @@ export const useWorkerComposer = ({
   )
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState('claude')
+  const [avatar, setAvatar] = useState<string | null>(null)
   const [startupCommand, setStartupCommand] = useState('')
   const [createWorkerError, setCreateWorkerError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const workerNameGeneratedRef = useRef(false)
   const roleDescriptionEditedRef = useRef(false)
+  // Tracks the previous `open` value so the name effect can tell "the dialog
+  // just opened" (seed a fresh name) apart from "role/language changed while
+  // open" (only refresh an auto name).
+  const composerWasOpenRef = useRef(false)
   const roleDescriptionDefault = getDefaultDescription(workerRole, roleTemplates, language)
   const customTemplates = useMemo(
     () => roleTemplates.filter((template) => !template.isBuiltin),
@@ -221,17 +227,40 @@ export const useWorkerComposer = ({
   }
 
   const usedNames = useMemo(() => new Set(workers.map((w) => w.name)), [workers])
+  // The live roster, mirrored into a ref. Read at generation time for
+  // collision avoidance, but deliberately NOT a dependency of the name effect
+  // below — the roster updates constantly over WebSocket, and triggering on it
+  // re-drew the name on every team event (the "name changes by itself" bug).
+  const usedNamesRef = useRef(usedNames)
+  usedNamesRef.current = usedNames
 
   const randomizeWorkerName = () => {
     workerNameGeneratedRef.current = true
-    setWorkerName(generateWorkerName({ language, role: workerRole, usedNames }))
+    setWorkerName(generateWorkerName({ usedNames }))
   }
 
+  // Keep the auto-generated name fresh on the intentional triggers only —
+  // opening the dialog, or changing role/language while the name is still
+  // auto. Roster churn no longer participates (see `usedNamesRef`). The name
+  // bank is shared across roles and languages; role/language still re-draw
+  // so switching either feels like a fresh pick.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: language and workerRole are intentional redraw triggers, not values read inside the effect
   useEffect(() => {
-    if (workerNameGeneratedRef.current) {
-      setWorkerName(generateWorkerName({ language, role: workerRole, usedNames }))
+    const justOpened = open && !composerWasOpenRef.current
+    composerWasOpenRef.current = open
+    if (!open) return
+    // On open: seed a ready-to-use random name so "Add member" starts filled.
+    if (justOpened) {
+      workerNameGeneratedRef.current = true
+      setWorkerName(generateWorkerName({ usedNames: usedNamesRef.current }))
+      return
     }
-  }, [language, workerRole, usedNames])
+    // Role/language changed while open: refresh only while still auto-generated
+    // (typing into the field clears the flag, so a user-typed name survives).
+    if (workerNameGeneratedRef.current) {
+      setWorkerName(generateWorkerName({ usedNames: usedNamesRef.current }))
+    }
+  }, [open, language, workerRole])
 
   const selectWorkerRole = (value: WorkerRole) => {
     setWorkerRole(value)
@@ -331,6 +360,7 @@ export const useWorkerComposer = ({
     setCreating(true)
     setCreateWorkerError(null)
     void createWorker({
+      avatar,
       commandPresetId,
       name: workerName,
       role: workerRole,
@@ -343,6 +373,7 @@ export const useWorkerComposer = ({
         selectWorkerRole('coder')
         setSelectedTemplateId(null)
         setCommandPresetId('claude')
+        setAvatar(null)
         setStartupCommand('')
         onSuccess()
         if (error) setCreateWorkerError(error)
@@ -354,6 +385,7 @@ export const useWorkerComposer = ({
   }
 
   return {
+    avatar,
     commandPresets,
     commandPresetId,
     createWorkerError,
@@ -368,6 +400,7 @@ export const useWorkerComposer = ({
     workerName,
     workerRole,
     setCommandPresetId: selectCommandPresetId,
+    setAvatar,
     setRoleDescription,
     setStartupCommand,
     setWorkerName: setWorkerNameFromUser,

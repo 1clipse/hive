@@ -8,8 +8,27 @@ const emitScriptBoot = (
   scriptPath: string,
   env: NodeJS.ProcessEnv | undefined,
   emitData: (chunk: string) => void,
-  emitExit: (exitCode: number) => void
+  emitExit: (exitCode: number) => void,
+  emitError: (error: Error) => void
 ) => {
+  if (scriptPath.endsWith('pty-error.js')) {
+    emitError(new Error('mock PTY pipe failed'))
+    return
+  }
+
+  if (scriptPath.endsWith('pty-eio-eof.js')) {
+    const error = Object.assign(new Error('read EIO'), { code: 'EIO', syscall: 'read' })
+    emitError(error)
+    emitExit(0)
+    return
+  }
+
+  if (scriptPath.endsWith('pty-eio-hangs.js')) {
+    const error = Object.assign(new Error('read EIO'), { code: 'EIO', syscall: 'read' })
+    emitError(error)
+    return
+  }
+
   if (scriptPath.endsWith('print-env.js')) {
     emitData(`${env?.HIVE_PROJECT_ID}\r\n${env?.HIVE_AGENT_ID}\r\n`)
     emitExit(0)
@@ -73,12 +92,13 @@ const emitScriptWrite = (
   }
 }
 
-vi.mock('node-pty', () => ({
+vi.mock('@lydell/node-pty', () => ({
   spawn: (_command: string, args: string[] = [], options: MockSpawnOptions = {}) => {
     const scriptPath = args[0] ?? ''
     const pid = 4242
     let dataHandler: ((chunk: string) => void) | undefined
     let exitHandler: ((event: { exitCode: number }) => void) | undefined
+    let errorHandler: ((error: Error) => void) | undefined
     let stopped = false
 
     const emitExit = (exitCode: number) => {
@@ -96,8 +116,15 @@ vi.mock('node-pty', () => ({
       dataHandler?.(chunk)
     }
 
+    const emitError = (error: Error) => {
+      if (stopped) {
+        return
+      }
+      errorHandler?.(error)
+    }
+
     setTimeout(() => {
-      emitScriptBoot(scriptPath, options.env, emitData, emitExit)
+      emitScriptBoot(scriptPath, options.env, emitData, emitExit, emitError)
     }, 0)
 
     return {
@@ -110,6 +137,9 @@ vi.mock('node-pty', () => ({
       },
       onExit(handler: (event: { exitCode: number }) => void) {
         exitHandler = handler
+      },
+      on(eventName: string, handler: (error: Error) => void) {
+        if (eventName === 'error') errorHandler = handler
       },
       write(text: string) {
         emitScriptWrite(scriptPath, text, emitData, emitExit)

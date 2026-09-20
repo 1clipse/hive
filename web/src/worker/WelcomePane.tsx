@@ -52,7 +52,7 @@ export const WelcomePane = ({
         <div className="text-2xl font-semibold text-pri">{t('welcome.title')}</div>
         <div className="text-sm text-sec">{t('welcome.desc')}</div>
       </div>
-      <ol className="grid w-full grid-cols-3 gap-3 text-left">
+      <ol className="grid w-full grid-cols-1 gap-3 text-left md:grid-cols-3">
         {STEPS.map((step, idx) => (
           <li
             key={step.titleKey}

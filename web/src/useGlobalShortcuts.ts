@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 
-type Shortcut = {
+export type Shortcut = {
   /** Lowercase event.key (e.g. 'b', '1'). Use a digit char '1'..'9' for index shortcuts. */
   key: string
   /** Require Cmd (mac) / Ctrl (others). */
   mod?: boolean
+  /** Require Alt/Option. Defaults to false so Windows AltGr does not trigger Ctrl shortcuts. */
+  alt?: boolean
   /** Require Shift. */
   shift?: boolean
   /** Handler. Returning `false` lets the keystroke continue to its default
@@ -24,7 +26,20 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
-const hasMod = (event: KeyboardEvent): boolean => (isMac ? event.metaKey : event.ctrlKey)
+const hasMod = (event: KeyboardEvent, platformIsMac: boolean): boolean =>
+  platformIsMac ? event.metaKey : event.ctrlKey
+
+export const eventMatchesShortcut = (
+  event: KeyboardEvent,
+  shortcut: Shortcut,
+  platformIsMac = isMac
+): boolean => {
+  if (event.key.toLowerCase() !== shortcut.key) return false
+  if ((shortcut.mod ?? false) !== hasMod(event, platformIsMac)) return false
+  if ((shortcut.alt ?? false) !== event.altKey) return false
+  if ((shortcut.shift ?? false) !== event.shiftKey) return false
+  return true
+}
 
 /**
  * Window-level keyboard shortcuts. Skips firing when the user is typing
@@ -41,11 +56,8 @@ export const useGlobalShortcuts = (shortcuts: Shortcut[]) => {
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return
-      const key = event.key.toLowerCase()
       for (const shortcut of shortcuts) {
-        if (key !== shortcut.key) continue
-        if ((shortcut.mod ?? false) !== hasMod(event)) continue
-        if ((shortcut.shift ?? false) !== event.shiftKey) continue
+        if (!eventMatchesShortcut(event, shortcut)) continue
         const handled = shortcut.handler(event)
         if (handled !== false) event.preventDefault()
         return

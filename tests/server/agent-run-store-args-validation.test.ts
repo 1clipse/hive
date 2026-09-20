@@ -1,16 +1,15 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import { createAgentRunStore } from '../../src/server/agent-run-store.js'
+import Database from '../../src/server/sqlite.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
   vi.restoreAllMocks()
 })
 
@@ -50,7 +49,7 @@ describe('agent run store args validation', () => {
     ).run(
       'ws-1',
       'agent-1',
-      '/bin/bash',
+      process.execPath,
       '[1,2]',
       null,
       null,

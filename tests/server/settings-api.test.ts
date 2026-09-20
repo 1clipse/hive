@@ -1,14 +1,23 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const servers: Array<Awaited<ReturnType<typeof startTestServer>>> = []
+const tempDirs: string[] = []
+
+const protocolTextHas = (protocolPath: string, text: string) =>
+  readFileSync(protocolPath, 'utf8').includes(text)
 
 afterEach(async () => {
   while (servers.length > 0) {
     await servers.pop()?.close()
   }
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 describe('settings api', () => {
@@ -72,6 +81,36 @@ describe('settings api', () => {
         display_name: 'Gemini',
         yolo_args_template: ['--yolo'],
       }),
+      expect.objectContaining({
+        id: 'hermes',
+        display_name: 'Hermes',
+        yolo_args_template: ['--yolo'],
+      }),
+      expect.objectContaining({
+        id: 'qwen',
+        display_name: 'Qwen Code',
+        yolo_args_template: ['--approval-mode', 'yolo'],
+      }),
+      expect.objectContaining({
+        id: 'pi',
+        display_name: 'Pi',
+        yolo_args_template: ['--approve'],
+      }),
+      expect.objectContaining({
+        id: 'agy',
+        display_name: 'Antigravity CLI',
+        yolo_args_template: ['--dangerously-skip-permissions'],
+      }),
+      expect.objectContaining({
+        id: 'cursor',
+        display_name: 'Cursor CLI',
+        yolo_args_template: ['--force'],
+      }),
+      expect.objectContaining({
+        id: 'grok',
+        display_name: 'Grok Build',
+        yolo_args_template: ['--always-approve'],
+      }),
     ])
     expect(templates).toEqual([
       expect.objectContaining({
@@ -110,6 +149,21 @@ describe('settings api', () => {
     servers.push(server)
     const cookie = await getUiCookie(server.baseUrl)
 
+    const retiredCreateResponse = await fetch(`${server.baseUrl}/api/settings/role-templates`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        name: 'Sentinel',
+        role_type: 'sentinel',
+        description: 'Patrol team status',
+        default_command: 'claude',
+        default_args: [],
+        default_env: {},
+      }),
+    })
+    expect(retiredCreateResponse.status).toBe(400)
+    await expect(retiredCreateResponse.json()).resolves.toEqual({ error: 'Invalid role_type' })
+
     const createResponse = await fetch(`${server.baseUrl}/api/settings/role-templates`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
@@ -125,6 +179,24 @@ describe('settings api', () => {
     expect(createResponse.status).toBe(201)
     const created = (await createResponse.json()) as { id: string; name: string }
     expect(created.name).toBe('Doc Writer')
+
+    const retiredUpdateResponse = await fetch(
+      `${server.baseUrl}/api/settings/role-templates/${created.id}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          name: 'Doc Sentinel',
+          role_type: 'sentinel',
+          description: 'Patrol docs',
+          default_command: 'claude',
+          default_args: [],
+          default_env: {},
+        }),
+      }
+    )
+    expect(retiredUpdateResponse.status).toBe(400)
+    await expect(retiredUpdateResponse.json()).resolves.toEqual({ error: 'Invalid role_type' })
 
     const updateResponse = await fetch(
       `${server.baseUrl}/api/settings/role-templates/${created.id}`,
@@ -240,6 +312,131 @@ describe('settings api', () => {
     })
     const presets = (await listResponse.json()) as Array<{ id: string }>
     expect(presets.some((preset) => preset.id === created.id)).toBe(false)
+  })
+
+  test('workflow CLI policy round-trips and rejects invalid payloads', async () => {
+    const server = await startTestServer()
+    servers.push(server)
+    const cookie = await getUiCookie(server.baseUrl)
+
+    // Unset → unrestricted, claude default (backward-compatible).
+    const before = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      headers: { cookie },
+    })
+    expect(before.status).toBe(200)
+    expect(await before.json()).toEqual({
+      default: 'claude',
+      allowed: ['claude', 'codex', 'opencode', 'gemini', 'hermes', 'qwen', 'pi', 'agy'],
+      supported: ['claude', 'codex', 'opencode', 'gemini', 'hermes', 'qwen', 'pi', 'agy'],
+    })
+
+    const put = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ default: 'codex', allowed: ['claude', 'codex'] }),
+    })
+    expect(put.status).toBe(200)
+    await expect(put.json()).resolves.toEqual(
+      expect.objectContaining({ default: 'codex', allowed: ['claude', 'codex'] })
+    )
+
+    const after = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      headers: { cookie },
+    })
+    await expect(after.json()).resolves.toEqual(
+      expect.objectContaining({ default: 'codex', allowed: ['claude', 'codex'] })
+    )
+
+    // default not in allowed → 400
+    const badDefault = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ default: 'gemini', allowed: ['claude', 'codex'] }),
+    })
+    expect(badDefault.status).toBe(400)
+
+    // non-canonical entry → 400
+    const badEntry = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ default: 'codex', allowed: ['codex', 'bogus'] }),
+    })
+    expect(badEntry.status).toBe(400)
+
+    // A rejected write must not have clobbered the previously-saved policy.
+    const stillCodex = await fetch(`${server.baseUrl}/api/settings/workflow-cli-policy`, {
+      headers: { cookie },
+    })
+    await expect(stillCodex.json()).resolves.toEqual(
+      expect.objectContaining({ default: 'codex', allowed: ['claude', 'codex'] })
+    )
+  })
+
+  test('workflow feature flag defaults off, round-trips, and rejects non-boolean', async () => {
+    const server = await startTestServer()
+    servers.push(server)
+    const cookie = await getUiCookie(server.baseUrl)
+
+    const before = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
+      headers: { cookie },
+    })
+    expect(before.status).toBe(200)
+    await expect(before.json()).resolves.toEqual({ enabled: false })
+
+    const enable = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(enable.status).toBe(200)
+    await expect(enable.json()).resolves.toEqual({ enabled: true })
+
+    const after = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
+      headers: { cookie },
+    })
+    await expect(after.json()).resolves.toEqual({ enabled: true })
+
+    const bad = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ enabled: 'yes' }),
+    })
+    expect(bad.status).toBe(400)
+  })
+
+  test('toggling the workflow feature immediately refreshes .hive/PROTOCOL.md for open workspaces', async () => {
+    const server = await startTestServer()
+    servers.push(server)
+    const cookie = await getUiCookie(server.baseUrl)
+    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-protocol-'))
+    tempDirs.push(workspacePath)
+
+    const wsResp = await fetch(`${server.baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ autostart_orchestrator: false, name: 'WS', path: workspacePath }),
+    })
+    expect(wsResp.status).toBe(201)
+    const protocolPath = join(workspacePath, '.hive', 'PROTOCOL.md')
+
+    const setEnabled = async (enabled: boolean) => {
+      const resp = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ enabled }),
+      })
+      expect(resp.status).toBe(200)
+    }
+
+    // Enabling rewrites the doc to include the workflow DSL right away — no
+    // need to reopen the workspace.
+    await setEnabled(true)
+    expect(protocolTextHas(protocolPath, 'team workflow run')).toBe(true)
+
+    // Disabling strips the executable workflow command back out; the doc may
+    // still keep a negative "do not call team workflow" guard.
+    await setEnabled(false)
+    expect(protocolTextHas(protocolPath, 'team workflow run')).toBe(false)
   })
 
   test('command preset responses expose executable availability', async () => {

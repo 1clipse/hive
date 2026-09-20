@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,13 +6,37 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
-afterEach(() => {
+const waitFor = async (
+  assertion: () => void | Promise<void>,
+  timeoutMs = 2000,
+  intervalMs = 25
+) => {
+  const deadline = Date.now() + timeoutMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    try {
+      await assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+
+  throw lastError
+}
+
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map((store) => store.close()))
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -32,9 +56,34 @@ describe('user input recovery', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string; name: string }
+      const orchestratorId = `${workspace.id}:orchestrator`
+      const orchScript = join(workspacePath, 'orch-stdin.js')
+      writeFileSync(
+        orchScript,
+        [
+          "process.stdin.setEncoding('utf8')",
+          "process.stdin.on('data', (chunk) => process.stdout.write('ORCH:' + chunk))",
+        ].join('\n')
+      )
+
+      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ command: process.execPath, args: [orchScript] }),
+      })
+      const startResponse = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ hive_port: String(hive.port) }),
+        }
+      )
+      expect(startResponse.status).toBe(201)
+      const startPayload = (await startResponse.json()) as { run_id: string }
 
       const inputResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/user-input`, {
         method: 'POST',
@@ -43,12 +92,20 @@ describe('user input recovery', () => {
       })
 
       expect(inputResponse.status).toBe(202)
+      await waitFor(async () => {
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.run_id}`, {
+          headers: { cookie: uiCookie },
+        })
+        const run = (await runResponse.json()) as { output: string }
+        expect(run.output).toContain('ORCH:请继续实现登录')
+      })
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
 
     const store = createRuntimeStore({ dataDir })
+    stores.push(store)
     const workspace = store.listWorkspaces()[0]
     if (!workspace) {
       throw new Error('Expected workspace after restart')
@@ -56,5 +113,5 @@ describe('user input recovery', () => {
     expect(store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
       expect.objectContaining({ type: 'user_input', text: '请继续实现登录' })
     )
-  })
+  }, 15_000)
 })

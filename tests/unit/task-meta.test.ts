@@ -47,4 +47,21 @@ describe('parseTaskMetadata', () => {
     expect(title).toBe('**T6** ()')
     expect(meta).toEqual([])
   })
+
+  test('detects pure-backslash Windows paths when the key is not in PATH_KEYS', () => {
+    const { meta } = parseTaskMetadata('**T7** (artifact: C:\\Users\\foo\\file.ts)')
+    expect(meta).toEqual([{ kind: 'path', label: 'artifact', value: 'C:\\Users\\foo\\file.ts' }])
+  })
+
+  test('detects UNC-style Windows paths when the key is not in PATH_KEYS', () => {
+    const { meta } = parseTaskMetadata('**T8** (artifact: server\\share\\reports\\out.log)')
+    expect(meta).toEqual([
+      { kind: 'path', label: 'artifact', value: 'server\\share\\reports\\out.log' },
+    ])
+  })
+
+  test('keeps prose with a single stray backslash out of the path bucket', () => {
+    const { meta } = parseTaskMetadata('**T9** (hint: use the \\n escape)')
+    expect(meta).toEqual([{ kind: 'note', value: 'hint: use the \\n escape' }])
+  })
 })

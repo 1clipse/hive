@@ -1,49 +1,74 @@
 import { randomUUID } from 'node:crypto'
-
-import type { Database } from 'better-sqlite3'
+import { retireClosedDispatchMessages } from './dispatch-message-delivery-policy.js'
+import { ConflictError } from './http-errors.js'
+import type { Database } from './sqlite.js'
 
 export type DispatchStatus = 'queued' | 'submitted' | 'reported' | 'cancelled'
 
 export interface DispatchRecord {
+  parentDispatchId?: string | null
+  rootDispatchId?: string
+  seenSeq?: number
   artifacts: string[]
   createdAt: number
   deliveredAt: number | null
+  dispatchPayloadBytes: number | null
   fromAgentId: string | null
   id: string
+  label: string | null
+  phase: string | null
   reportedAt: number | null
+  reportPayloadBytes: number | null
   reportText: string | null
   sequence: number | null
   status: DispatchStatus
+  stepIndex: number | null
   submittedAt: number | null
   text: string
   toAgentId: string
+  workflowRunId: string | null
   workspaceId: string
 }
 
 interface DispatchRow {
+  parent_dispatch_id: string | null
+  root_dispatch_id: string
+  seen_seq: number
   artifacts: string | null
   created_at: number
   delivered_at: number | null
+  dispatch_payload_bytes: number | null
   from_agent_id: string | null
   id: string
+  label: string | null
+  phase: string | null
   reported_at: number | null
+  report_payload_bytes: number | null
   report_text: string | null
   sequence: number
   status: DispatchStatus
+  step_index: number | null
   submitted_at: number | null
   text: string
   to_agent_id: string
+  workflow_run_id: string | null
   workspace_id: string
 }
 
-interface CreateDispatchInput {
+export interface CreateDispatchInput {
+  relatedToDispatchId?: string
   fromAgentId?: string
+  label?: string
+  phase?: string
+  stepIndex?: number
   text: string
   toAgentId: string
+  workflowRunId?: string
   workspaceId: string
 }
 
 interface ReportDispatchInput {
+  seenSeq?: number
   artifacts: string[]
   dispatchId?: string
   reportText: string
@@ -58,6 +83,7 @@ interface CancelDispatchInput {
 }
 
 export interface ListDispatchesOptions {
+  reportedSince?: number
   limit?: number
   offset?: number
   status?: DispatchStatus
@@ -76,36 +102,74 @@ const parseArtifacts = (value: string | null) => {
 }
 
 const toRecord = (row: DispatchRow): DispatchRecord => ({
+  parentDispatchId: row.parent_dispatch_id,
+  rootDispatchId: row.root_dispatch_id,
+  seenSeq: row.seen_seq,
   artifacts: parseArtifacts(row.artifacts),
   createdAt: row.created_at,
   deliveredAt: row.delivered_at,
+  dispatchPayloadBytes: row.dispatch_payload_bytes ?? null,
   fromAgentId: row.from_agent_id,
   id: row.id,
+  label: row.label ?? null,
+  phase: row.phase ?? null,
   reportedAt: row.reported_at,
+  reportPayloadBytes: row.report_payload_bytes ?? null,
   reportText: row.report_text,
   sequence: row.sequence,
   status: row.status,
+  stepIndex: row.step_index,
   submittedAt: row.submitted_at,
   text: row.text,
   toAgentId: row.to_agent_id,
+  workflowRunId: row.workflow_run_id,
   workspaceId: row.workspace_id,
 })
 
 export const createDispatchLedgerStore = (db: Database) => {
+  const getDispatch = (workspaceId: string, dispatchId: string) => {
+    const row = db
+      .prepare('SELECT * FROM dispatches WHERE workspace_id = ? AND id = ?')
+      .get(workspaceId, dispatchId) as DispatchRow | undefined
+    return row ? toRecord(row) : undefined
+  }
+  const listRelatedDispatches = (workspaceId: string, rootDispatchId: string) =>
+    (
+      db
+        .prepare(
+          'SELECT * FROM dispatches WHERE workspace_id = ? AND root_dispatch_id = ? ORDER BY sequence'
+        )
+        .all(workspaceId, rootDispatchId) as DispatchRow[]
+    ).map(toRecord)
   const createDispatch = (input: CreateDispatchInput) => {
+    const parent = input.relatedToDispatchId
+      ? getDispatch(input.workspaceId, input.relatedToDispatchId)
+      : undefined
+    if (input.relatedToDispatchId && !parent)
+      throw new ConflictError('Related dispatch does not exist in this workspace')
+    const id = randomUUID()
     const record: DispatchRecord = {
       artifacts: [],
       createdAt: Date.now(),
       deliveredAt: null,
+      dispatchPayloadBytes: null,
       fromAgentId: input.fromAgentId ?? null,
-      id: randomUUID(),
+      id,
+      parentDispatchId: parent?.id ?? null,
+      rootDispatchId: parent?.rootDispatchId ?? parent?.id ?? id,
+      seenSeq: 0,
+      label: input.label ?? null,
+      phase: input.phase ?? null,
       reportedAt: null,
+      reportPayloadBytes: null,
       reportText: null,
       sequence: null,
       status: 'queued',
+      stepIndex: input.stepIndex ?? null,
       submittedAt: null,
       text: input.text,
       toAgentId: input.toAgentId,
+      workflowRunId: input.workflowRunId ?? null,
       workspaceId: input.workspaceId,
     }
 
@@ -122,8 +186,12 @@ export const createDispatchLedgerStore = (db: Database) => {
         submitted_at,
         reported_at,
         report_text,
-        artifacts
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        artifacts,
+        workflow_run_id,
+        step_index,
+        phase,
+        label, parent_dispatch_id, root_dispatch_id, seen_seq
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
       record.workspaceId,
@@ -136,7 +204,14 @@ export const createDispatchLedgerStore = (db: Database) => {
       record.submittedAt,
       record.reportedAt,
       record.reportText,
-      JSON.stringify(record.artifacts)
+      JSON.stringify(record.artifacts),
+      record.workflowRunId,
+      record.stepIndex,
+      record.phase,
+      record.label,
+      record.parentDispatchId ?? null,
+      record.rootDispatchId ?? null,
+      0
     )
 
     return record
@@ -144,17 +219,83 @@ export const createDispatchLedgerStore = (db: Database) => {
 
   const deleteDispatch = (dispatchId: string) => {
     db.prepare('DELETE FROM dispatches WHERE id = ?').run(dispatchId)
+    retireClosedDispatchMessages(db, dispatchId)
   }
 
-  const markSubmitted = (dispatchId: string) => {
-    const submittedAt = Date.now()
+  /** Atomic claim for delivery: flips queued → submitted only if still
+   *  queued. Exactly one of N racing deliverers (send path, start replay)
+   *  wins; the rest skip the PTY write. */
+  const claimQueuedDispatch = (dispatchId: string): boolean => {
+    const result = db
+      .prepare(
+        `UPDATE dispatches
+         SET status = 'submitted', submitted_at = ?
+         WHERE id = ? AND status = 'queued'`
+      )
+      .run(Date.now(), dispatchId)
+    return result.changes === 1
+  }
+
+  /** Inverse of claimQueuedDispatch for replay failures: the write never
+   *  reached a live PTY (PtyInactive), so the dispatch goes back to parked
+   *  instead of being cancelled — the next worker start retries it. Only a
+   *  still-'submitted' row can be reparked (a report/cancel wins). */
+  const reparkClaimedDispatch = (dispatchId: string): boolean => {
+    const result = db
+      .prepare(
+        `UPDATE dispatches
+         SET status = 'queued', submitted_at = NULL, delivered_at = NULL, dispatch_payload_bytes = NULL
+         WHERE id = ? AND status = 'submitted'`
+      )
+      .run(dispatchId)
+    return result.changes === 1
+  }
+
+  const markDelivered = (input: {
+    deliveredAt: number
+    dispatchId: string
+    dispatchPayloadBytes: number
+  }) => {
+    // Only claimed (submitted) rows accept a delivery stamp. A report that
+    // closes the row before the PTY write resolves leaves delivered_at
+    // NULL ("reported before delivery confirmed"); metrics skip those
+    // rows rather than inventing a duration.
     db.prepare(
       `UPDATE dispatches
-       SET status = ?, submitted_at = ?
-       WHERE id = ?`
-    ).run('submitted', submittedAt, dispatchId)
+       SET delivered_at = COALESCE(delivered_at, ?),
+           dispatch_payload_bytes = COALESCE(dispatch_payload_bytes, ?)
+       WHERE id = ? AND status = 'submitted'`
+    ).run(input.deliveredAt, input.dispatchPayloadBytes, input.dispatchId)
   }
 
+  const recordReportPayloadBytes = (dispatchId: string, bytes: number) => {
+    db.prepare(
+      `UPDATE dispatches
+       SET report_payload_bytes = COALESCE(report_payload_bytes, ?)
+       WHERE id = ?`
+    ).run(bytes, dispatchId)
+  }
+
+  const listSubmittedForWorker = (workspaceId: string, toAgentId: string) =>
+    (
+      db
+        .prepare(
+          `SELECT *
+           FROM dispatches
+           WHERE workspace_id = ?
+             AND to_agent_id = ?
+             AND status = 'submitted'
+           ORDER BY sequence ASC`
+        )
+        .all(workspaceId, toAgentId) as DispatchRow[]
+    ).map(toRecord)
+
+  /** Reportable target for a worker token (spec issue #79): only work that
+   *  was actually claimed for delivery (`submitted`) may be reported.
+   *  Without an id, exactly one submitted row is reportable — zero or more
+   *  than one is a conflict. Queued rows were never pasted into the worker's
+   *  PTY and are never reportable. Cancel keeps its own wider lookup
+   *  (findOpenDispatchById: queued + submitted). */
   const findOpenDispatch = (workspaceId: string, toAgentId: string, dispatchId?: string) => {
     if (dispatchId) {
       const row = db
@@ -169,22 +310,16 @@ export const createDispatchLedgerStore = (db: Database) => {
         )
         .get(dispatchId, workspaceId, toAgentId) as DispatchRow | undefined
 
-      return row ? toRecord(row) : undefined
+      if (!row) return undefined
+      const record = toRecord(row)
+      // A still-queued row was never pasted into the worker's PTY; a worker
+      // token must not be able to close parked work as done.
+      if (record.status !== 'submitted') return undefined
+      return record
     }
 
-    const row = db
-      .prepare(
-        `SELECT *
-         FROM dispatches
-         WHERE workspace_id = ?
-           AND to_agent_id = ?
-           AND status IN ('queued', 'submitted')
-         ORDER BY sequence ASC
-         LIMIT 1`
-      )
-      .get(workspaceId, toAgentId) as DispatchRow | undefined
-
-    return row ? toRecord(row) : undefined
+    const submitted = listSubmittedForWorker(workspaceId, toAgentId)
+    return submitted.length === 1 ? submitted[0] : undefined
   }
 
   const findOpenDispatchById = (workspaceId: string, dispatchId: string) => {
@@ -202,57 +337,92 @@ export const createDispatchLedgerStore = (db: Database) => {
     return row ? toRecord(row) : undefined
   }
 
-  const markReportedByWorker = (input: ReportDispatchInput) => {
-    const dispatch = findOpenDispatch(input.workspaceId, input.toAgentId, input.dispatchId)
-    if (!dispatch) {
-      return undefined
-    }
+  const markReportedByWorker = (input: ReportDispatchInput) =>
+    db.transaction(() => {
+      const dispatch = findOpenDispatch(input.workspaceId, input.toAgentId, input.dispatchId)
+      if (!dispatch) {
+        return undefined
+      }
 
-    const reportedAt = Date.now()
-    db.prepare(
-      `UPDATE dispatches
+      const required = (
+        db
+          .prepare(`SELECT COALESCE(MAX(sequence), 0) AS seq FROM dispatch_messages
+      WHERE dispatch_id = ? AND recipient_agent_id = ? AND from_agent_id != ? AND kind != 'progress'`)
+          .get(dispatch.id, dispatch.toAgentId, dispatch.toAgentId) as { seq: number }
+      ).seq
+      const seenSeq = input.seenSeq ?? 0
+      if (!Number.isSafeInteger(seenSeq) || seenSeq < 0 || seenSeq !== required) {
+        throw new ConflictError(
+          `Dispatch ${dispatch.id} requires seen_seq ${required}. Read \`team messages --dispatch ${dispatch.id}\`, consider its inbound messages, then report the same dispatch with \`--seen ${required}\`. Do not substitute another dispatch ID.`
+        )
+      }
+      const reportedAt = Date.now()
+      db.prepare(
+        `UPDATE dispatches
        SET status = ?,
            reported_at = ?,
            report_text = ?,
-           artifacts = ?
+           artifacts = ?,
+           seen_seq = ?
        WHERE id = ?`
-    ).run('reported', reportedAt, input.reportText, JSON.stringify(input.artifacts), dispatch.id)
+      ).run(
+        'reported',
+        reportedAt,
+        input.reportText,
+        JSON.stringify(input.artifacts),
+        input.seenSeq ?? 0,
+        dispatch.id
+      )
+      retireClosedDispatchMessages(db, dispatch.id)
 
-    return {
-      ...dispatch,
-      artifacts: input.artifacts,
-      reportedAt,
-      reportText: input.reportText,
-      status: 'reported' as const,
-    }
-  }
+      return {
+        ...dispatch,
+        artifacts: input.artifacts,
+        reportedAt,
+        reportText: input.reportText,
+        seenSeq: input.seenSeq ?? 0,
+        status: 'reported' as const,
+      }
+    })()
 
-  const markCancelled = (input: CancelDispatchInput) => {
-    const dispatch = findOpenDispatchById(input.workspaceId, input.dispatchId)
-    if (!dispatch) {
-      return undefined
-    }
+  const markCancelled = (input: CancelDispatchInput) =>
+    db.transaction(() => {
+      const dispatch = findOpenDispatchById(input.workspaceId, input.dispatchId)
+      if (!dispatch) {
+        return undefined
+      }
 
-    const cancelledAt = Date.now()
-    db.prepare(
-      `UPDATE dispatches
+      const cancelledAt = Date.now()
+      db.prepare(
+        `UPDATE dispatches
        SET status = ?,
            reported_at = ?,
            report_text = ?
        WHERE id = ?`
-    ).run('cancelled', cancelledAt, input.reason, dispatch.id)
+      ).run('cancelled', cancelledAt, input.reason, dispatch.id)
+      retireClosedDispatchMessages(db, dispatch.id)
 
-    return {
-      ...dispatch,
-      reportedAt: cancelledAt,
-      reportText: input.reason,
-      status: 'cancelled' as const,
-    }
-  }
+      return {
+        ...dispatch,
+        reportedAt: cancelledAt,
+        reportText: input.reason,
+        status: 'cancelled' as const,
+      }
+    })()
 
   const listWorkspaceDispatches = (workspaceId: string, options: ListDispatchesOptions = {}) => {
     const offset = options.offset ?? 0
     const limit = options.limit ?? 100
+
+    if (options.status === 'reported' && options.reportedSince !== undefined) {
+      return (
+        db
+          .prepare(`SELECT * FROM dispatches
+        WHERE workspace_id = ? AND status = 'reported' AND reported_at >= ?
+        ORDER BY reported_at ASC, sequence ASC LIMIT ? OFFSET ?`)
+          .all(workspaceId, options.reportedSince, limit, offset) as DispatchRow[]
+      ).map(toRecord)
+    }
 
     if (options.status) {
       return (
@@ -282,6 +452,32 @@ export const createDispatchLedgerStore = (db: Database) => {
     ).map(toRecord)
   }
 
+  const listRecentWorkspaceDispatches = (workspaceId: string, limit = 100) => {
+    const rows = db
+      .prepare(
+        `SELECT *
+         FROM dispatches
+         WHERE workspace_id = ?
+         ORDER BY sequence DESC, created_at DESC
+         LIMIT ?`
+      )
+      .all(workspaceId, limit) as DispatchRow[]
+    return rows.map(toRecord)
+  }
+
+  const listOpenWorkspaceDispatches = (workspaceId: string) => {
+    const rows = db
+      .prepare(
+        `SELECT *
+         FROM dispatches
+         WHERE workspace_id = ?
+           AND status IN ('queued', 'submitted')
+         ORDER BY sequence ASC, created_at ASC`
+      )
+      .all(workspaceId) as DispatchRow[]
+    return rows.map(toRecord)
+  }
+
   const listOpenDispatchKinds = () => {
     return db
       .prepare(
@@ -294,27 +490,95 @@ export const createDispatchLedgerStore = (db: Database) => {
   }
 
   const deleteWorkspaceDispatches = (workspaceId: string) => {
+    db.prepare(
+      'DELETE FROM dispatch_message_outbox WHERE message_id IN (SELECT id FROM dispatch_messages WHERE workspace_id = ?)'
+    ).run(workspaceId)
+    db.prepare('DELETE FROM dispatch_messages WHERE workspace_id = ?').run(workspaceId)
     db.prepare('DELETE FROM dispatches WHERE workspace_id = ?').run(workspaceId)
   }
 
   const deleteWorkerDispatches = (workspaceId: string, workerId: string) => {
-    db.prepare('DELETE FROM dispatches WHERE workspace_id = ? AND to_agent_id = ?').run(
+    // Keep responsibility and conversation evidence after a member is removed.
+    db.prepare(`UPDATE dispatches SET status = 'cancelled', reported_at = ?, report_text = 'Worker removed'
+      WHERE workspace_id = ? AND to_agent_id = ? AND status IN ('queued','submitted')`).run(
+      Date.now(),
       workspaceId,
+      workerId
+    )
+    db.prepare(`UPDATE dispatch_message_outbox SET state = 'cancelled' WHERE state IN ('queued','delivering')
+      AND message_id IN (SELECT id FROM dispatch_messages WHERE workspace_id = ?
+        AND (recipient_agent_id = ? OR (from_agent_id = ? AND kind = 'question')))`).run(
+      workspaceId,
+      workerId,
       workerId
     )
   }
 
+  // Every dispatch fired by a workflow run carries the run id (M1-B added the
+  // column; M2-C plumbs it through). This is the timeline query the UI uses to
+  // explode a run row into per-worker activity.
+  const listWorkflowRunDispatches = (runId: string): DispatchRecord[] => {
+    const rows = db
+      .prepare('SELECT * FROM dispatches WHERE workflow_run_id = ? ORDER BY sequence, created_at')
+      .all(runId) as DispatchRow[]
+    return rows.map(toRecord)
+  }
+
+  // Open dispatch ids tied to a workflow run — drives the runner's stop path
+  // (each id gets a notifyCancel so the runner's await rejects).
+  const listOpenDispatchIdsForRun = (runId: string): string[] =>
+    (
+      db
+        .prepare(
+          `SELECT id FROM dispatches
+           WHERE workflow_run_id = ? AND status IN ('queued', 'submitted')`
+        )
+        .all(runId) as Array<{ id: string }>
+    ).map((row) => row.id)
+
+  // Open workflow-tagged dispatches addressed to a specific worker. Drives the
+  // PTY-exit cancel path (TIER 1 #1): when a workflow-spawned worker dies
+  // without calling `team report`, the runner's `awaitReport` would otherwise
+  // hang for DEFAULT_TIMEOUT_MS (10 min). The exit handler enumerates these
+  // and `notifyCancel`s each so the surrounding `agent()`/`parallel`/`pipeline`
+  // sees an immediate reject.
+  const listOpenWorkflowDispatchesForWorker = (
+    workspaceId: string,
+    workerId: string
+  ): Array<{ dispatchId: string; runId: string }> =>
+    (
+      db
+        .prepare(
+          `SELECT id, workflow_run_id FROM dispatches
+           WHERE workspace_id = ?
+             AND to_agent_id = ?
+             AND workflow_run_id IS NOT NULL
+             AND status IN ('queued', 'submitted')`
+        )
+        .all(workspaceId, workerId) as Array<{ id: string; workflow_run_id: string }>
+    ).map((row) => ({ dispatchId: row.id, runId: row.workflow_run_id }))
+
   return {
     createDispatch,
+    getDispatch,
+    listRelatedDispatches,
     deleteDispatch,
     deleteWorkerDispatches,
     deleteWorkspaceDispatches,
     findOpenDispatch,
     findOpenDispatchById,
+    claimQueuedDispatch,
+    reparkClaimedDispatch,
     listOpenDispatchKinds,
+    listOpenDispatchIdsForRun,
+    listOpenWorkspaceDispatches,
+    listOpenWorkflowDispatchesForWorker,
+    listRecentWorkspaceDispatches,
+    listWorkflowRunDispatches,
     listWorkspaceDispatches,
     markCancelled,
+    markDelivered,
     markReportedByWorker,
-    markSubmitted,
+    recordReportPayloadBytes,
   }
 }

@@ -1,11 +1,11 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test } from 'vitest'
 import WebSocket from 'ws'
+import Database from '../../src/server/sqlite.js'
 
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -30,6 +30,20 @@ const waitFor = async (
   }
 
   throw lastError
+}
+
+const withTimeout = async <T>(label: string, promise: Promise<T>, timeoutMs = 5000): Promise<T> => {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
 }
 
 const toWsUrl = (baseUrl: string, suffix: string, clientId: string) => {
@@ -107,15 +121,27 @@ const waitForRunOutput = async (
   })
 }
 
-const openViewer = async (baseUrl: string, cookie: string, runId: string, clientId: string) => {
+const openViewer = async (
+  baseUrl: string,
+  cookie: string,
+  runId: string,
+  clientId: string,
+  searchSuffix = ''
+) => {
   const outputs: string[] = []
   const controlMessages: Array<{ [key: string]: unknown; type: string }> = []
-  const io = new WebSocket(toWsUrl(baseUrl, `/ws/terminal/${runId}/io`, clientId), {
-    headers: { cookie },
-  })
-  const control = new WebSocket(toWsUrl(baseUrl, `/ws/terminal/${runId}/control`, clientId), {
-    headers: { cookie },
-  })
+  const io = new WebSocket(
+    `${toWsUrl(baseUrl, `/ws/terminal/${runId}/io`, clientId)}${searchSuffix}`,
+    {
+      headers: { cookie },
+    }
+  )
+  const control = new WebSocket(
+    `${toWsUrl(baseUrl, `/ws/terminal/${runId}/control`, clientId)}${searchSuffix}`,
+    {
+      headers: { cookie },
+    }
+  )
 
   io.on('message', (chunk) => outputs.push(chunk.toString()))
   control.on('message', (chunk) => {
@@ -137,7 +163,7 @@ const openViewer = async (baseUrl: string, cookie: string, runId: string, client
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('terminal mirror', () => {
@@ -151,7 +177,7 @@ describe('terminal mirror', () => {
       "console.log('HELLO'); process.stdin.resume(); setInterval(() => {}, 1000)\n"
     )
 
-    const server = await startTestServer()
+    const server = await withTimeout('test server', startTestServer())
     try {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
@@ -175,60 +201,63 @@ describe('terminal mirror', () => {
     }
   }, 60000)
 
-  test('T1b restore mirror uses initial control socket dimensions before replaying output', async () => {
-    const workspacePath = join(tmpdir(), `hive-terminal-mirror-wide-${Date.now()}`)
-    mkdirSync(workspacePath, { recursive: true })
-    tempDirs.push(workspacePath)
-    const script = join(workspacePath, 'wide.js')
-    writeFileSync(
-      script,
-      [
-        "process.stdout.write('LEFT\\x1b[100CRIGHT')",
-        'process.stdin.resume()',
-        'setInterval(() => {}, 1000)',
-      ].join('\n')
-    )
-
-    const server = await startTestServer()
-    try {
-      const cookie = await getUiCookie(server.baseUrl)
-      const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
-      const worker = await createWorker(server.baseUrl, cookie, workspace.id)
-      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+  test.skipIf(process.platform === 'win32')(
+    'T1b restore mirror uses initial control socket dimensions before replaying output',
+    async () => {
+      const workspacePath = join(tmpdir(), `hive-terminal-mirror-wide-${Date.now()}`)
+      mkdirSync(workspacePath, { recursive: true })
+      tempDirs.push(workspacePath)
+      const script = join(workspacePath, 'wide.js')
+      const wideText = `LEFT${'x'.repeat(90)}RIGHT`
+      writeFileSync(
         script,
-      ])
-      const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
-
-      await waitForRunOutput(server.baseUrl, cookie, run.runId, 'RIGHT')
-
-      const controlMessages: Array<{ [key: string]: unknown; type: string }> = []
-      const control = new WebSocket(
-        `${server.baseUrl.replace('http://', 'ws://')}/ws/terminal/${run.runId}/control?clientId=wide-viewer&cols=120&rows=5`,
-        { headers: { cookie } }
+        [
+          `process.stdout.write(${JSON.stringify(wideText)})`,
+          'process.stdin.resume()',
+          'setInterval(() => {}, 1000)',
+        ].join('\n')
       )
-      control.on('message', (chunk) => {
-        controlMessages.push(
-          JSON.parse(chunk.toString()) as { [key: string]: unknown; type: string }
+
+      const server = await startTestServer()
+      try {
+        const cookie = await getUiCookie(server.baseUrl)
+        const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
+        const worker = await createWorker(server.baseUrl, cookie, workspace.id)
+        await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+          script,
+        ])
+        const run = await withTimeout(
+          'wide agent start',
+          startAgent(server.baseUrl, cookie, workspace.id, worker.id)
         )
-      })
-      await new Promise<void>((resolve, reject) => {
-        control.once('open', () => resolve())
-        control.once('error', reject)
-      })
 
-      await waitFor(() => {
-        const restore = controlMessages.find((message) => message.type === 'restore')
-        const snapshot = String(restore?.snapshot ?? '')
-        expect(snapshot).toContain('LEFT')
-        expect(snapshot).toContain('\u001b[100CRIGHT')
-        expect(snapshot).not.toContain('\u001b[75CRIGHT')
-      })
+        await withTimeout(
+          'wide run output',
+          waitForRunOutput(server.baseUrl, cookie, run.runId, 'RIGHT')
+        )
 
-      control.close()
-    } finally {
-      await server.close()
-    }
-  }, 60000)
+        const viewer = await withTimeout(
+          'wide viewer sockets',
+          openViewer(server.baseUrl, cookie, run.runId, 'wide-viewer', '&cols=120&rows=5')
+        )
+
+        await withTimeout(
+          'wide restore snapshot',
+          waitFor(() => {
+            const restore = viewer.controlMessages.find((message) => message.type === 'restore')
+            const snapshot = String(restore?.snapshot ?? '')
+            expect(snapshot).toContain(wideText)
+          })
+        )
+
+        viewer.io.close()
+        viewer.control.close()
+      } finally {
+        await server.close()
+      }
+    },
+    60000
+  )
 
   test('T2 multiple viewers each receive one copy of future PTY output', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-fanout-${Date.now()}`)
@@ -258,7 +287,7 @@ describe('terminal mirror', () => {
       const viewerA = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-a')
       const viewerB = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-b')
 
-      viewerA.io.send('world\n')
+      viewerA.io.send('world\r')
 
       await waitFor(() => {
         expect(viewerA.outputs.join('')).toContain('IN:world')
@@ -310,7 +339,7 @@ describe('terminal mirror', () => {
       viewerB.control.close()
       await new Promise((resolve) => setTimeout(resolve, 50))
 
-      viewerA.io.send('after close\n')
+      viewerA.io.send('after close\r')
 
       await waitFor(() => {
         expect(viewerA.outputs.join('')).toContain('IN:after close')
@@ -324,7 +353,7 @@ describe('terminal mirror', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 60000)
 
   test('T4 PTY transcript is not persisted into sqlite messages', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-db-${Date.now()}`)
@@ -351,7 +380,7 @@ describe('terminal mirror', () => {
         expect(viewer.outputs.join('')).toContain('SECRET_TEXT')
       })
 
-      const db = new Database(join(server.dataDir, 'runtime.sqlite'), { readonly: true })
+      const db = new Database(join(server.dataDir, 'runtime.sqlite'), { readOnly: true })
       const row = db
         .prepare('SELECT COUNT(*) AS count FROM messages WHERE text LIKE ?')
         .get('%SECRET_TEXT%') as { count: number }

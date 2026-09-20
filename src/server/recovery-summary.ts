@@ -1,8 +1,14 @@
+import type { DispatchMessageRecord } from '../shared/team-collaboration.js'
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 
+import type { DispatchRecord } from './dispatch-ledger-store.js'
+import { formatRequiredSeenSeqAdvice } from './dispatch-message-payload.js'
+import { buildDispatchQuestionReplyCommand } from './dispatch-message-reply.js'
+import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
+import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
 import { getHiveTeamRules } from './hive-team-guidance.js'
 import type { RecoveryMessage } from './message-log-store.js'
-import { wrapSystemMessage } from './system-message.js'
+import { wrapRawSystemMessage } from './system-message.js'
 import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
 const TASKS_HEAD_LIMIT = 1536
@@ -10,8 +16,8 @@ const TASKS_HEAD_LIMIT = 1536
 const formatUserInputs = (messages: RecoveryMessage[]) => {
   const userInputs = messages.filter((message) => message.type === 'user_input')
   return userInputs.length > 0
-    ? userInputs.slice(-5).map((message) => `- user: ${message.text}`)
-    : ['- （最近 1 小时没有新的 user_input）']
+    ? userInputs.slice(-5).map((message) => `- user: ${escapeHiveEnvelopeText(message.text)}`)
+    : ['- (no new user_input in the last hour)']
 }
 
 const formatTaskEvents = (messages: RecoveryMessage[], agent: AgentSummary) => {
@@ -27,106 +33,157 @@ const formatTaskEvents = (messages: RecoveryMessage[], agent: AgentSummary) => {
   )
   return taskEvents.length > 0
     ? taskEvents.slice(-8).map((message) => {
-        if (message.type === 'send') return `- send -> ${message.to}: ${message.text}`
-        if (message.type === 'status') return `- status <- ${message.from}: ${message.text}`
+        if (message.type === 'send') {
+          return `- send -> ${escapeHiveEnvelopeText(message.to)}: ${escapeHiveEnvelopeText(message.text)}`
+        }
+        if (message.type === 'status') {
+          return `- status <- ${escapeHiveEnvelopeText(message.from)}: ${escapeHiveEnvelopeText(message.text)}`
+        }
         const status = message.status ? ` [${message.status}]` : ''
-        return `- report <- ${message.from}${status}: ${message.text}`
+        return `- report <- ${escapeHiveEnvelopeText(message.from)}${status}: ${escapeHiveEnvelopeText(message.text)}`
       })
-    : ['- （最近没有任务事件）']
+    : ['- (no recent task events)']
 }
 
-const getOpenTaskTargets = (agent: AgentSummary, workers: AgentSummary[]) =>
-  agent.role === 'orchestrator' ? workers : [agent]
-
-const formatOpenTasks = (
-  messages: RecoveryMessage[],
-  agent: AgentSummary,
-  workers: AgentSummary[]
-) => {
-  const targetAgents = getOpenTaskTargets(agent, workers).filter(
-    (target) => target.role !== 'orchestrator'
+const formatOpenTasks = (dispatches: DispatchRecord[] | undefined, agent: AgentSummary) => {
+  if (!dispatches) return ['- Ledger unavailable; inspect `team list` before acting.']
+  const open = dispatches.filter(
+    (dispatch) =>
+      (dispatch.status === 'queued' || dispatch.status === 'submitted') &&
+      (agent.role === 'orchestrator' || dispatch.toAgentId === agent.id)
   )
-  const targetIds = new Set(targetAgents.map((target) => target.id))
-  const queues = new Map<string, Array<Extract<RecoveryMessage, { type: 'send' }>>>()
+  if (open.length === 0) return ['- (no open tasks right now)']
+  return open.map(
+    (dispatch) =>
+      `- dispatch ${dispatch.id} (${dispatch.status}, owner ${escapeHiveEnvelopeText(dispatch.toAgentId)}): ${escapeHiveEnvelopeText(dispatch.text)}`
+  )
+}
 
-  for (const message of messages) {
-    if (message.type === 'send' && targetIds.has(message.to)) {
-      const queue = queues.get(message.to) ?? []
-      queue.push(message)
-      queues.set(message.to, queue)
-      continue
-    }
+const formatDispatchMessages = (
+  dispatches: DispatchRecord[] | undefined,
+  messages: DispatchMessageRecord[],
+  agent: AgentSummary
+) => {
+  const open = (dispatches ?? []).filter(
+    (dispatch) =>
+      (dispatch.status === 'queued' || dispatch.status === 'submitted') &&
+      (agent.role === 'orchestrator' || dispatch.toAgentId === agent.id)
+  )
+  return open.flatMap((dispatch) => {
+    const related = messages.filter(
+      (message) => message.dispatchId === dispatch.id || message.sourceDispatchId === dispatch.id
+    )
+    const requiredSeenSeq = related.reduce(
+      (seq, message) =>
+        message.dispatchId === dispatch.id &&
+        message.recipientAgentId === dispatch.toAgentId &&
+        message.fromAgentId !== dispatch.toAgentId &&
+        message.kind !== 'progress'
+          ? Math.max(seq, message.sequence)
+          : seq,
+      0
+    )
+    if (related.length === 0) return []
+    return [
+      `- dispatch ${dispatch.id}: required_seen_seq ${requiredSeenSeq}. ${formatRequiredSeenSeqAdvice(dispatch.id, requiredSeenSeq)}`,
+      ...related
+        .slice(-8)
+        .map(
+          (message) =>
+            `  - ${message.id} (dispatch ${message.dispatchId}) #${message.sequence} ${message.kind} (${message.deliveryState}): ${escapeHiveEnvelopeText(message.text.slice(0, 500))}`
+        ),
+    ]
+  })
+}
 
-    if (message.type === 'report' && targetIds.has(message.from)) {
-      queues.get(message.from)?.shift()
-    }
-  }
-
-  const lines: string[] = []
-  for (const target of targetAgents) {
-    const queue = queues.get(target.id) ?? []
-    for (const task of queue.slice(-8)) {
-      lines.push(`- ${target.name}: ${task.text}`)
-    }
-    if (target.pendingTaskCount > queue.length) {
-      lines.push(
-        `- ${target.name}: ${target.pendingTaskCount - queue.length} 个 pending 无可恢复详情`
-      )
-    }
-  }
-
-  return lines.length > 0 ? lines : ['- （当前没有未完成任务）']
+const formatPendingQuestions = (messages: DispatchMessageRecord[], agent: AgentSummary) => {
+  const questions = messages.filter(
+    (message) => message.kind === 'question' && message.recipientAgentId === agent.id
+  )
+  if (questions.length === 0) return []
+  return [
+    '## Questions awaiting your answer (including completed responsibilities)',
+    'Answer the requested context; this does not reopen completed work or authorize new implementation.',
+    ...questions.flatMap((message) => {
+      const replyCommand = buildDispatchQuestionReplyCommand(message)
+      return [
+        `- question ${message.id}: target ${message.dispatchId}; source ${message.sourceDispatchId ?? 'orchestrator'}; from ${escapeHiveEnvelopeText(message.fromAgentId)}; ${message.deliveryState}.`,
+        `  ${escapeHiveEnvelopeText(message.text.slice(0, 1000))}`,
+        `  Read: team messages --dispatch ${message.dispatchId}`,
+        ...(replyCommand ? [`  Reply with your answer on stdin: ${replyCommand}`] : []),
+      ]
+    }),
+  ]
 }
 
 const formatWorkers = (workers: AgentSummary[]) => {
-  if (workers.length === 0) return ['- 当前没有其他 worker']
+  if (workers.length === 0) return ['- (no other members)']
   return workers.map(
     (worker) =>
-      `- ${worker.name} (${worker.role}, ${worker.status}, pending_task_count: ${worker.pendingTaskCount})`
+      `- ${escapeHiveEnvelopeText(worker.name)} (${worker.role}, ${worker.status}, pending_task_count: ${worker.pendingTaskCount})`
   )
 }
 
 const getTaskSectionTitle = (agent: AgentSummary) =>
-  agent.role === 'orchestrator' ? '## 你已派出的任务' : '## 最近派给你的任务'
+  agent.role === 'orchestrator' ? '## Tasks you dispatched' : '## Tasks recently sent to you'
 
 export const buildRecoverySummary = ({
   agent,
-  allTaskMessages,
+  openDispatches,
+  dispatchMessages = [],
+  actionableDispatchMessages = [],
+  resumedSession = false,
+  memoryDigest,
   messages,
   tasksContent,
   workers,
   workspace,
+  flags = FEATURE_FLAGS_ALL_OFF,
 }: {
   agent: AgentSummary
   allTaskMessages?: RecoveryMessage[]
+  openDispatches?: DispatchRecord[]
+  dispatchMessages?: DispatchMessageRecord[]
+  actionableDispatchMessages?: DispatchMessageRecord[]
+  resumedSession?: boolean
+  memoryDigest?: string | null | undefined
   messages: RecoveryMessage[]
   tasksContent: string
   workers: AgentSummary[]
   workspace: WorkspaceSummary
+  /** Live experimental flags — keep the recovered handover prompt consistent
+   *  with what a fresh startup would inject (workflow + team-sizing rules). */
+  flags?: FeatureFlags
 }) =>
-  wrapSystemMessage(
+  wrapRawSystemMessage(
     [
-      `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
-      '你刚被 Hive 重启了，且无法通过原生 session resume 恢复。下面是接力上下文。',
+      `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`,
+      `Current member profile: ${escapeHiveEnvelopeText(agent.description)}`,
+      resumedSession
+        ? 'Your native session resumed. These are current protocol facts; PTY delivery is not proof that inputs were considered.'
+        : 'Hive restarted you. These are current responsibility facts; verify artifacts before continuing work.',
       '',
-      '## 最近 1 小时与 user 的对话',
+      '## Conversation with the user in the last hour',
       ...formatUserInputs(messages),
       '',
       getTaskSectionTitle(agent),
       ...formatTaskEvents(messages, agent),
       '',
-      '## 当前未完成任务',
-      ...formatOpenTasks(allTaskMessages ?? messages, agent, workers),
+      '## Open tasks (dispatch ledger)',
+      ...formatOpenTasks(openDispatches, agent),
+      ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
+      ...formatPendingQuestions(actionableDispatchMessages, agent),
       '',
-      `## 当前 ${TASKS_RELATIVE_PATH} 状态`,
-      tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
+      `## Current ${TASKS_RELATIVE_PATH}`,
+      escapeHiveEnvelopeText(tasksContent.slice(0, TASKS_HEAD_LIMIT)) || '(empty)',
       '',
-      '## 当前活跃 worker',
+      '## Active members',
       ...formatWorkers(workers),
       '',
-      agent.role === 'orchestrator' ? '## Hive worker 派单规则' : '## Hive worker 边界',
-      ...getHiveTeamRules(agent),
+      ...(memoryDigest ? ['## Hive memory digest', memoryDigest, ''] : []),
+      agent.role === 'orchestrator' ? '## Hive member dispatch rules' : '## Hive member boundaries',
+      ...getHiveTeamRules(agent, flags),
       '',
-      '请基于此继续。如果不确定，问 user。',
+      'Continue from these facts within your current responsibility; reconcile missing context before acting.',
     ].join('\n')
   )

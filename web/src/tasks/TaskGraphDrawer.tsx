@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog'
 import {
   AtSign,
   Check,
@@ -9,17 +10,18 @@ import {
   CornerDownRight,
   FileCode,
   FileText,
-  PanelRightClose,
+  ListChecks,
   Pencil,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useI18n } from '../i18n.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
-import { DEFAULT_WORKERS_PANE_WIDTH } from '../usePaneSplit.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { countDirectCheckboxChildren, type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
@@ -29,7 +31,7 @@ import { ownerToneFromName, parseTaskMetadata, type TaskMetaItem } from './task-
  * Max indent levels we render with nested visual structure. Beyond this we
  * flatten the subtree and prefix each row with `▸` — see §6.6.1. Pushing back
  * against deep nesting nudges Orchestrators to keep the tree readable rather
- * than carving the drawer into vertical strips at level 6+.
+ * than carving the dialog into vertical strips at level 6+.
  */
 const MAX_VISUAL_DEPTH = 3
 
@@ -62,7 +64,7 @@ type TaskGraphDrawerProps = {
   onSelectOwner?: (workerName: string) => void
   /**
    * Transport-layer connection flag from §3.5.2 / §3.6.5. When `true`, the
-   * drawer is rendered with the `connection-stale` overlay and all write
+   * dialog is rendered with the `connection-stale` overlay and all write
    * paths (checkbox toggle, inline edit, add, raw-editor save) are disabled.
    * Reads (scroll, copy, expand/collapse) stay enabled.
    */
@@ -214,7 +216,7 @@ const TaskItem = ({
   const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
   // Folding state is per-row, in-memory only. Resets on remount
-  // (workspace switch, drawer close+reopen) — see §6.6.5: never persisted.
+  // (workspace switch, dialog close+reopen) — see §6.6.5: never persisted.
   const [collapsed, setCollapsed] = useState(false)
   // §6.6.6 — transient "just copied" affordance on the Copy button. Swaps the
   // icon to ✓ for 1.5s so the user gets visual confirmation that the click
@@ -391,12 +393,12 @@ const TaskItem = ({
           )}
         </span>
         {showActions ? (
-          <div className="task-row__actions">
+          <div className="task-row__actions pointer-coarse:opacity-100">
             {canCopy ? (
               <Tooltip label={copied ? t('tasks.action.copied') : t('tasks.action.copyLine')}>
                 <button
                   type="button"
-                  className="task-row__action"
+                  className="task-row__action pointer-coarse:h-10 pointer-coarse:w-10"
                   onClick={() => {
                     onCopyLine?.(task.line)
                     setCopied(true)
@@ -419,7 +421,7 @@ const TaskItem = ({
               <Tooltip label={t('tasks.action.edit')}>
                 <button
                   type="button"
-                  className="task-row__action"
+                  className="task-row__action pointer-coarse:h-10 pointer-coarse:w-10"
                   onClick={() => setEditing(true)}
                   data-testid={`task-edit-${task.line}`}
                   aria-label={t('tasks.aria.editTask')}
@@ -432,7 +434,7 @@ const TaskItem = ({
               <Tooltip label={t('tasks.action.addSubtask')}>
                 <button
                   type="button"
-                  className="task-row__action"
+                  className="task-row__action pointer-coarse:h-10 pointer-coarse:w-10"
                   onClick={() => {
                     setCollapsed(false)
                     setAdding(true)
@@ -448,7 +450,7 @@ const TaskItem = ({
               <Tooltip label={t('tasks.action.delete')}>
                 <button
                   type="button"
-                  className="task-row__action task-row__action--danger"
+                  className="task-row__action task-row__action--danger pointer-coarse:h-10 pointer-coarse:w-10"
                   onClick={() => onDelete?.(task.line)}
                   data-testid={`task-delete-${task.line}`}
                   aria-label={t('tasks.aria.deleteTask')}
@@ -497,9 +499,16 @@ const TaskItem = ({
 const AddTaskInline = ({
   onSubmit,
   disabled = false,
+  variant = 'ghost',
 }: {
   onSubmit: (text: string) => void
   disabled?: boolean
+  /**
+   * `ghost` (default) — the quiet in-list affordance. `primary` — the focal
+   * CTA hosted inside the empty state: centered, solid accent icon, card-like
+   * surface so it reads as the obvious "do this first" action.
+   */
+  variant?: 'ghost' | 'primary'
 }) => {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -530,7 +539,7 @@ const AddTaskInline = ({
         onClick={() => setOpen(true)}
         disabled={disabled}
         data-testid="task-add-toggle"
-        className="task-add-toggle"
+        className={`task-add-toggle${variant === 'primary' ? ' task-add-toggle--primary' : ''}`}
       >
         <span aria-hidden className="task-add-toggle__icon">
           <Plus size={12} />
@@ -560,24 +569,54 @@ const AddTaskInline = ({
   )
 }
 
-const flattenTasks = (tasks: ParsedTask[]): ParsedTask[] =>
-  tasks.flatMap((task) => [task, ...flattenTasks(task.children)])
-
 const getTaskSummary = (tasks: ParsedTask[]) => {
-  const flatTasks = flattenTasks(tasks)
-  const totalTasks = flatTasks.length
-  const completedTasks = flatTasks.filter((task) => task.checked).length
+  let totalTasks = 0
+  let completedTasks = 0
+  const openRoots: ParsedTask[] = []
+  const doneRoots: ParsedTask[] = []
+  const visit = (task: ParsedTask) => {
+    totalTasks += 1
+    if (task.checked) completedTasks += 1
+    for (const child of task.children) visit(child)
+  }
+  for (const task of tasks) {
+    if (task.checked) doneRoots.push(task)
+    else openRoots.push(task)
+    visit(task)
+  }
   const completionPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100)
   return {
     completedTasks,
     completionPercent,
-    doneRoots: tasks.filter((task) => task.checked),
-    openRoots: tasks.filter((task) => !task.checked),
+    doneRoots,
+    openRoots,
     totalTasks,
   }
 }
 
-export const TaskGraphDrawer = ({
+type TaskGraphContentProps = {
+  content: string
+  hasConflict: boolean
+  onContentChange: (value: string) => void
+  onKeepLocal: () => void
+  onReload: () => void
+  onSave: () => Promise<void>
+  onToggleTaskLine: (lineIndex: number) => void
+  onAppendTask?: (text: string) => void
+  onAppendSubtask?: (parentLine: number, text: string) => void
+  onUpdateTaskText?: (lineIndex: number, nextText: string) => void
+  onDeleteTask?: (lineIndex: number) => void
+  workspacePath: string | null
+  knownWorkerNames?: readonly string[]
+  onSelectOwner?: (workerName: string) => void
+  connectionStale?: boolean
+  /** Use Radix title/description primitives when hosted inside TaskGraphDrawer. */
+  dialogSemantics?: boolean
+  /** When provided a close button renders in the header; omit on mobile (nav is the exit). */
+  onClose?: () => void
+}
+
+export const TaskGraphContent = ({
   content,
   hasConflict,
   onClose,
@@ -590,17 +629,15 @@ export const TaskGraphDrawer = ({
   onAppendSubtask,
   onUpdateTaskText,
   onDeleteTask,
-  open,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: workspacePath is passed for future integration
   workspacePath,
   knownWorkerNames,
   onSelectOwner,
   connectionStale = false,
-}: TaskGraphDrawerProps) => {
+  dialogSemantics = false,
+}: TaskGraphContentProps) => {
   const { t } = useI18n()
   const [rawMode, setRawMode] = useState(false)
-  // Copy the *raw markdown line* from the source-of-truth content, not the
-  // parsed `task.text` (which has mentions stripped). §6.6.6 — "paste back to
-  // orchestrator" works best when the copied text matches what's on disk.
   const copyTaskLine = (lineIndex: number) => {
     const line = content.split(/\r?\n/)[lineIndex]
     if (typeof line !== 'string') return
@@ -625,76 +662,65 @@ export const TaskGraphDrawer = ({
     () => getTaskSummary(tasks),
     [tasks]
   )
-  // Default to expanded when the completed cohort is small enough that
-  // hiding it feels like the UI "ate" the user's just-checked task.
   const [completedOpen, setCompletedOpen] = useState(doneRoots.length <= 3)
-  const filePath = workspacePath ? `${workspacePath}/.hive/tasks.md` : '.hive/tasks.md'
-
-  // §6.6.7 — `Esc` closes the drawer when no inline editor is consuming the
-  // key. We only handle it when the focused target is the drawer container or
-  // its non-input children, so an open `<input>` (inline edit, add task) gets
-  // first crack at the event.
-  const onDrawerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Escape') return
-    const tag = (event.target as HTMLElement | null)?.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return
-    event.preventDefault()
-    onClose()
-  }
-
-  const drawerClassName = `drawer absolute right-0 top-0 bottom-0 z-20 flex flex-col border-l shadow-2xl${open ? ' open' : ''}${connectionStale ? ' drawer--stale' : ''}`
 
   return (
-    <aside
-      aria-label={t('tasks.aria.drawer')}
-      data-testid="task-graph-drawer"
-      data-connection-stale={connectionStale || undefined}
-      aria-hidden={!open}
-      onKeyDown={onDrawerKeyDown}
-      className={drawerClassName}
-      style={{
-        background: 'var(--bg-1)',
-        borderColor: 'var(--border)',
-        maxWidth: 'calc(100vw - 3.5rem)',
-        minWidth: 360,
-        width: DEFAULT_WORKERS_PANE_WIDTH,
-      }}
-    >
+    <div className="task-drawer flex h-full min-h-0 flex-col" data-testid="task-graph-content">
       <header className="task-drawer__header">
-        <div className="flex min-w-0 flex-1 items-baseline gap-2">
-          <Tooltip label={<span className="mono text-ter">{filePath}</span>}>
-            <span className="cursor-default font-semibold text-pri">{t('tasks.title.todo')}</span>
-          </Tooltip>
+        <div className="task-drawer__mark">
+          <ListChecks size={16} aria-hidden />
+        </div>
+        <div className="task-drawer__heading">
+          {dialogSemantics ? (
+            <>
+              <Dialog.Title className="task-drawer__title">{t('tasks.title.todo')}</Dialog.Title>
+              <Dialog.Description className="task-drawer__subtitle">
+                {t('tasks.subtitle')}
+              </Dialog.Description>
+            </>
+          ) : (
+            <>
+              <h2 className="task-drawer__title">{t('tasks.title.todo')}</h2>
+              <p className="task-drawer__subtitle">{t('tasks.subtitle')}</p>
+            </>
+          )}
+        </div>
+        <div className="task-drawer__header-actions">
           {totalTasks > 0 ? (
-            <span className="text-xs text-ter tabular-nums" data-testid="task-graph-summary">
+            <span
+              className="task-drawer__summary"
+              data-complete={completionPercent === 100 || undefined}
+              data-testid="task-graph-summary"
+            >
               <span data-testid="task-progress-text">
-                {completedTasks} / {totalTasks}
-              </span>{' '}
-              · {completionPercent}%
+                {completedTasks}/{totalTasks}
+              </span>
             </span>
           ) : null}
+          <Tooltip label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}>
+            <button
+              type="button"
+              onClick={() => setRawMode((v) => !v)}
+              data-testid="task-raw-toggle"
+              className="icon-btn pointer-coarse:min-h-10"
+              aria-label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}
+            >
+              <FileCode size={14} />
+            </button>
+          </Tooltip>
+          {onClose ? (
+            <Tooltip label={t('tasks.action.closeTodo')}>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={t('tasks.action.closeTodo')}
+                className="icon-btn pointer-coarse:min-h-10"
+              >
+                <X size={14} />
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
-        <Tooltip label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}>
-          <button
-            type="button"
-            onClick={() => setRawMode((v) => !v)}
-            data-testid="task-raw-toggle"
-            className="icon-btn"
-            aria-label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}
-          >
-            <FileCode size={14} />
-          </button>
-        </Tooltip>
-        <Tooltip label={t('tasks.action.closeTodo')}>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('tasks.action.closeTodo')}
-            className="icon-btn"
-          >
-            <PanelRightClose size={14} />
-          </button>
-        </Tooltip>
       </header>
       {!rawMode && totalTasks > 0 ? (
         <div
@@ -709,7 +735,7 @@ export const TaskGraphDrawer = ({
           <span style={{ width: `${completionPercent}%` }} />
         </div>
       ) : null}
-      <div className="flex-1 scroll-y px-3 py-3 text-sm">
+      <div className="task-drawer__content scroll-y flex-1 text-sm">
         {rawMode ? (
           <TaskGraphRawEditor
             content={content}
@@ -720,20 +746,26 @@ export const TaskGraphDrawer = ({
             onSave={onSave}
           />
         ) : tasks.length === 0 ? (
-          <>
-            {onAppendTask ? (
-              <div className="mb-1">
-                <AddTaskInline disabled={connectionStale} onSubmit={onAppendTask} />
-              </div>
-            ) : null}
+          <div className="flex h-full items-center justify-center">
             <EmptyState
               icon={<FileText size={20} />}
               title={t('tasks.empty.title')}
               description={t('tasks.empty.description')}
+              {...(onAppendTask
+                ? {
+                    action: (
+                      <AddTaskInline
+                        variant="primary"
+                        disabled={connectionStale}
+                        onSubmit={onAppendTask}
+                      />
+                    ),
+                  }
+                : {})}
             />
-          </>
+          </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="task-drawer__lists">
             <ul className="task-list" data-testid="task-graph-list">
               {openRoots.map((task) => (
                 <TaskItem depth={0} handlers={taskHandlers} key={task.line} task={task} />
@@ -745,23 +777,29 @@ export const TaskGraphDrawer = ({
               ) : null}
             </ul>
             {doneRoots.length > 0 ? (
-              <div className="mt-1">
+              <div className="mt-2">
                 <button
                   type="button"
                   onClick={() => setCompletedOpen((v) => !v)}
                   aria-expanded={completedOpen}
                   data-testid="task-completed-toggle"
-                  className="task-completed-toggle"
+                  className="task-completed-toggle pointer-coarse:min-h-10"
                 >
                   {completedOpen ? (
-                    <ChevronDown size={12} aria-hidden />
+                    <ChevronDown size={11} aria-hidden />
                   ) : (
-                    <ChevronRight size={12} aria-hidden />
+                    <ChevronRight size={11} aria-hidden />
                   )}
                   <span>{t('tasks.completed.toggle', { count: doneRoots.length })}</span>
+                  <span
+                    className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] tabular-nums"
+                    style={{ background: 'var(--bg-3)', color: 'var(--text-tertiary)' }}
+                  >
+                    {doneRoots.length}
+                  </span>
                 </button>
                 {completedOpen ? (
-                  <ul className="task-list" data-testid="task-completed-list">
+                  <ul className="task-list mt-1" data-testid="task-completed-list">
                     {doneRoots.map((task) => (
                       <TaskItem depth={0} handlers={taskHandlers} key={task.line} task={task} />
                     ))}
@@ -772,6 +810,92 @@ export const TaskGraphDrawer = ({
           </div>
         )}
       </div>
-    </aside>
+    </div>
+  )
+}
+
+export const TaskGraphDrawer = ({
+  content,
+  hasConflict,
+  onClose,
+  onContentChange,
+  onKeepLocal,
+  onReload,
+  onSave,
+  onToggleTaskLine,
+  onAppendTask,
+  onAppendSubtask,
+  onUpdateTaskText,
+  onDeleteTask,
+  open,
+  workspacePath,
+  knownWorkerNames,
+  onSelectOwner,
+  connectionStale = false,
+}: TaskGraphDrawerProps) => {
+  const { t } = useI18n()
+  const isMobile = useIsMobile()
+
+  // §6.6.7 — `Esc` closes the dialog when no inline editor is consuming the key.
+  const onDialogKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape') return
+    const tag = (event.target as HTMLElement | null)?.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return
+    event.preventDefault()
+    onClose()
+  }
+
+  const dialogClassName = `dialog-scale-pop elev-2 task-dialog__content pointer-events-auto flex flex-col rounded-lg border${connectionStale ? ' task-dialog--stale' : ''}`
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          data-testid="task-graph-overlay"
+          className="app-overlay fixed inset-0 z-40"
+        />
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+          <Dialog.Content
+            aria-label={t('tasks.aria.drawer')}
+            data-testid="task-graph-drawer"
+            data-connection-stale={connectionStale || undefined}
+            data-mobile={isMobile || undefined}
+            onEscapeKeyDown={(event) => event.preventDefault()}
+            onKeyDown={onDialogKeyDown}
+            className={dialogClassName}
+            style={
+              isMobile
+                ? { background: 'var(--bg-1)', borderColor: 'var(--border-bright)' }
+                : {
+                    background: 'var(--bg-1)',
+                    borderColor: 'var(--border-bright)',
+                    height: 'min(720px, calc(100vh - 64px))',
+                    width: 'min(700px, calc(100vw - 48px))',
+                  }
+            }
+          >
+            <TaskGraphContent
+              content={content}
+              dialogSemantics
+              hasConflict={hasConflict}
+              onClose={onClose}
+              onContentChange={onContentChange}
+              onKeepLocal={onKeepLocal}
+              onReload={onReload}
+              onSave={onSave}
+              onToggleTaskLine={onToggleTaskLine}
+              workspacePath={workspacePath}
+              {...(onAppendTask ? { onAppendTask } : {})}
+              {...(onAppendSubtask ? { onAppendSubtask } : {})}
+              {...(onUpdateTaskText ? { onUpdateTaskText } : {})}
+              {...(onDeleteTask ? { onDeleteTask } : {})}
+              {...(knownWorkerNames ? { knownWorkerNames } : {})}
+              {...(onSelectOwner ? { onSelectOwner } : {})}
+              {...(connectionStale ? { connectionStale } : {})}
+            />
+          </Dialog.Content>
+        </div>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

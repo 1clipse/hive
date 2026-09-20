@@ -1,12 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import Database from '../../src/server/sqlite.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -61,7 +59,7 @@ describe('active workspace app_state', () => {
       )
       expect(updateResponse.status).toBe(204)
 
-      const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+      const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
       const row = db
         .prepare('SELECT value FROM app_state WHERE key = ?')
         .get('active_workspace_id') as { value: string | null }
@@ -83,7 +81,7 @@ describe('active workspace app_state', () => {
       )
       const restored = (await restoredResponse.json()) as { key: string; value: string | null }
       expect(restored).toEqual({ key: 'active_workspace_id', value: betaId })
-      const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+      const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
       const row = db
         .prepare('SELECT value FROM app_state WHERE key = ?')
         .get('active_workspace_id') as { value: string | null }

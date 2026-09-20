@@ -50,23 +50,27 @@ afterEach(async () => {
 })
 
 describe('workspace create initial state', () => {
-  test('newly created workspace immediately shows the Linear workspace view with empty drawer', async () => {
+  test('newly created workspace shows the Linear workspace view and opens an empty tasks dialog', async () => {
     render(<App />)
 
     await waitFor(() => {
       expect(screen.getByText('No Workspaces')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
+    fireEvent.click(
+      within(screen.getByTestId('empty-state')).getByRole('button', { name: 'New Workspace' })
+    )
 
-    const confirm = await screen.findByTestId('confirm-workspace-dialog')
-    fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
+    const confirmDialog = await screen.findByTestId('confirm-workspace-dialog')
+    const nameInput = within(confirmDialog).getByTestId('confirm-workspace-name')
+    await waitFor(() => expect(nameInput).toBeEnabled(), { timeout: 15000 })
+    fireEvent.change(nameInput, {
       target: { value: 'Alpha' },
     })
-    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
-    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+    fireEvent.click(within(confirmDialog).getByTestId('confirm-workspace-startup-toggle'))
+    fireEvent.change(within(confirmDialog).getByTestId('confirm-workspace-startup-command'), {
       target: { value: `${process.execPath} -e "process.stdin.resume()"` },
     })
-    const createButton = within(confirm).getByTestId('confirm-workspace-create')
+    const createButton = within(confirmDialog).getByTestId('confirm-workspace-create')
     await waitFor(() => expect(createButton).toBeEnabled(), { timeout: 15000 })
     fireEvent.click(createButton)
 
@@ -95,6 +99,8 @@ describe('workspace create initial state', () => {
     )
     expect(screen.queryByRole('contentinfo')).toBeNull()
 
+    expect(screen.queryByTestId('task-graph-drawer')).toBeNull()
+    fireEvent.click(screen.getByTestId('topbar-blueprint'))
     const drawer = await screen.findByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
     expect(within(drawer).getByText(/No tasks yet/i)).toBeInTheDocument()

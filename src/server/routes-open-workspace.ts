@@ -16,7 +16,7 @@ export const openWorkspaceRoutes: RouteDefinition[] = [
       )
       if (!workspaceId) return
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       const body = await readJsonBody<OpenWorkspaceBody>(request)
       if (!isOpenTargetId(body.target_id)) {

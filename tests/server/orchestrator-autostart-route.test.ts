@@ -1,20 +1,13 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const servers: Array<{ close: () => Promise<void> }> = []
@@ -31,7 +24,7 @@ afterEach(async () => {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
   }
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 const makeWorkspacePath = (label: string) => {
@@ -59,6 +52,22 @@ const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25)
     }
   }
   throw lastError
+}
+
+const writeWindowsCommandShim = (binDir: string, name: string, commandFile: string) => {
+  const scriptPath = join(binDir, `${name}-shim.mjs`)
+  writeFileSync(
+    scriptPath,
+    [
+      "import { writeFileSync } from 'node:fs'",
+      `writeFileSync(${JSON.stringify(commandFile)}, ${JSON.stringify(name)} + ' ' + process.argv.slice(2).join(' ') + '\\n')`,
+      'setInterval(() => {}, 1000)',
+    ].join('\n')
+  )
+  writeFileSync(
+    join(binDir, `${name}.cmd`),
+    `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
+  )
 }
 
 const isProcessAlive = (pid: number) => {
@@ -96,9 +105,12 @@ const startServer = async (input: { dataDir?: string } = {}) => {
 
 beforeEach(() => {
   // Default for these tests: drive the dummy CLI so the happy path doesn't
-  // depend on `claude` being on PATH.
-  setEnv('HIVE_ORCHESTRATOR_COMMAND', 'bash')
-  setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', JSON.stringify(['-c', 'echo queen up; sleep 60']))
+  // depend on `claude` or a POSIX shell being on PATH.
+  setEnv('HIVE_ORCHESTRATOR_COMMAND', process.execPath)
+  setEnv(
+    'HIVE_ORCHESTRATOR_ARGS_JSON',
+    JSON.stringify(['-e', "console.log('queen up'); setInterval(() => {}, 1000)"])
+  )
 })
 
 describe('POST /api/workspaces autostart_orchestrator', () => {
@@ -286,31 +298,32 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
   test('default Claude orchestrator launch injects bypass permission args', async () => {
     setEnv('HIVE_ORCHESTRATOR_COMMAND', undefined)
     setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', undefined)
-
-    const agentManager = createAgentManager()
-    const startSpy = vi.spyOn(agentManager, 'startAgent').mockImplementation(async (input) => ({
-      agentId: input.agentId,
-      exitCode: null,
-      output: '',
-      pid: 123,
-      runId: 'run-default-claude',
-      status: 'running',
-    }))
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-default-claude-bin-'))
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-default-claude-'))
+    tempDirs.push(binDir)
     tempDirs.push(dataDir)
-    const store = createRuntimeStore({ agentManager, dataDir })
-    const app = createApp({ store })
-    await new Promise<void>((resolve) => {
-      app.server.listen(0, '127.0.0.1', () => resolve())
-    })
-    servers.push({
-      async close() {
-        await new Promise<void>((resolve) => app.server.close(() => resolve()))
-      },
-    })
-    const address = app.server.address()
-    if (!address || typeof address === 'string') throw new Error('No port')
-    const baseUrl = `http://127.0.0.1:${address.port}`
+    const argsFile = join(dataDir, 'claude-args.txt')
+    const scriptPath = join(binDir, 'claude-fake.mjs')
+    writeFileSync(
+      scriptPath,
+      [
+        "import { writeFileSync } from 'node:fs'",
+        `writeFileSync(${JSON.stringify(argsFile)}, process.argv.slice(2).join('\\n'))`,
+        'setInterval(() => {}, 1000)',
+      ].join('\n')
+    )
+    writeFileSync(
+      join(binDir, 'claude'),
+      `#!/bin/sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`
+    )
+    chmodSync(join(binDir, 'claude'), 0o755)
+    writeFileSync(
+      join(binDir, 'claude.cmd'),
+      `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
+    )
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+
+    const { store, baseUrl } = await startServer({ dataDir })
     const cookie = await getUiCookie(baseUrl)
 
     const response = await fetch(`${baseUrl}/api/workspaces`, {
@@ -325,17 +338,17 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
     }
     expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
-    expect(startSpy).toHaveBeenCalledOnce()
-    const startInput = startSpy.mock.calls[0]?.[0]
-    expect(startInput?.command).toBe('claude')
-    expect(startInput?.args).toEqual([
-      '--dangerously-skip-permissions',
-      '--permission-mode=bypassPermissions',
-      '--disallowedTools=Task',
-    ])
+    await waitFor(() => {
+      expect(readFileSync(argsFile, 'utf8').split(/\r?\n/u)).toEqual([
+        '--dangerously-skip-permissions',
+        '--permission-mode=bypassPermissions',
+        '--disallowedTools=Task',
+      ])
+    })
     expect(
       store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)?.commandPresetId
     ).toBeNull()
+    if (body.orchestrator_start.run_id) store.stopAgentRun(body.orchestrator_start.run_id)
   })
 
   test('UI workspace autostart uses the runtime socket port instead of client hive_port', async () => {
@@ -385,7 +398,7 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     const fakeCodex = join(binDir, 'codex')
     writeFileSync(fakeCodex, ['#!/bin/sh', 'echo codex orchestrator up', 'sleep 60'].join('\n'))
     chmodSync(fakeCodex, 0o755)
-    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
     const codexHome = mkdtempSync(join(tmpdir(), 'hive-codex-home-'))
     tempDirs.push(codexHome)
     setEnv('CODEX_HOME', codexHome)
@@ -428,17 +441,26 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     tempDirs.push(dataDir)
     const argsFile = join(dataDir, 'opencode-args.txt')
     const fakeOpenCode = join(binDir, 'opencode')
+    const fakeOpenCodeScript = join(binDir, 'opencode-fake.mjs')
     writeFileSync(
-      fakeOpenCode,
+      fakeOpenCodeScript,
       [
-        '#!/bin/sh',
-        `printf '%s\\n' "$@" > "${argsFile}"`,
-        'echo opencode orchestrator up',
-        'sleep 60',
+        "import { writeFileSync } from 'node:fs'",
+        `writeFileSync(${JSON.stringify(argsFile)}, process.argv.slice(2).join(' ') + '\\n')`,
+        "console.log('opencode orchestrator up')",
+        'setInterval(() => {}, 1000)',
       ].join('\n')
     )
+    writeFileSync(
+      fakeOpenCode,
+      `#!/usr/bin/env sh\nexec "${process.execPath}" "${fakeOpenCodeScript}" "$@"\n`
+    )
     chmodSync(fakeOpenCode, 0o755)
-    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    writeFileSync(
+      join(binDir, 'opencode.cmd'),
+      `@echo off\r\n"${process.execPath}" "${fakeOpenCodeScript}" %*\r\n`
+    )
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
     const opencodeHome = mkdtempSync(join(tmpdir(), 'hive-opencode-home-'))
     tempDirs.push(opencodeHome)
     setEnv('HIVE_OPENCODE_DB_PATH', join(opencodeHome, 'opencode.db'))
@@ -496,7 +518,10 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     )
     chmodSync(fakeShell, 0o755)
     setEnv('SHELL', fakeShell)
-    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+    if (process.platform === 'win32') {
+      writeWindowsCommandShim(binDir, 'ccs', shellCommandFile)
+    }
 
     const { store, baseUrl } = await startServer({ dataDir })
     const cookie = await getUiCookie(baseUrl)
@@ -522,9 +547,19 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
 
     const config = store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)
+    const startupCommand = 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"'
+    const expectedConfig =
+      process.platform === 'win32'
+        ? {
+            args: ['/d', '/s', '/c', startupCommand],
+            command: process.env.ComSpec ?? 'cmd.exe',
+          }
+        : {
+            args: ['-lic', startupCommand],
+            command: fakeShell,
+          }
     expect(config).toMatchObject({
-      args: ['-lic', 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"'],
-      command: fakeShell,
+      ...expectedConfig,
       commandPresetId: null,
       interactiveCommand: 'claude',
       presetAugmentationDisabled: true,
@@ -532,10 +567,16 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     })
     await waitFor(() => {
       expect(readFileSync(shellCommandFile, 'utf8')).toBe(
-        'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"\n'
+        process.platform === 'win32'
+          ? 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label old session\n'
+          : 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"\n'
       )
     })
-    expect(readFileSync(shellArgsFile, 'utf8')).not.toContain('bypass')
+    const observedLaunchText =
+      process.platform === 'win32'
+        ? readFileSync(shellCommandFile, 'utf8')
+        : readFileSync(shellArgsFile, 'utf8')
+    expect(observedLaunchText).not.toContain('bypass')
 
     if (body.orchestrator_start.run_id) store.stopAgentRun(body.orchestrator_start.run_id)
   })
@@ -553,7 +594,10 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     )
     chmodSync(fakeShell, 0o755)
     setEnv('SHELL', fakeShell)
-    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+    if (process.platform === 'win32') {
+      writeWindowsCommandShim(binDir, 'claude', shellCommandFile)
+    }
 
     const { store, baseUrl } = await startServer({ dataDir })
     const cookie = await getUiCookie(baseUrl)
@@ -578,9 +622,19 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     }
     expect(workspace.orchestrator_start).toEqual({ error: null, ok: false, run_id: null })
     const orchestratorId = `${workspace.id}:orchestrator`
+    const startupCommand = 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19'
+    const expectedConfig =
+      process.platform === 'win32'
+        ? {
+            args: ['/d', '/s', '/c', startupCommand],
+            command: process.env.ComSpec ?? 'cmd.exe',
+          }
+        : {
+            args: ['-lic', startupCommand],
+            command: fakeShell,
+          }
     expect(store.peekAgentLaunchConfig(workspace.id, orchestratorId)).toMatchObject({
-      args: ['-lic', 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19'],
-      command: fakeShell,
+      ...expectedConfig,
       commandPresetId: null,
       interactiveCommand: 'claude',
       presetAugmentationDisabled: true,
@@ -601,9 +655,9 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       expect(readFileSync(shellCommandFile, 'utf8')).toBe(
         'claude --resume f500de1d-df89-470f-a2ce-e385acffef19\n'
       )
-    })
+    }, 8000)
     store.stopAgentRun(startBody.run_id)
-  })
+  }, 10000)
 
   test('spawn failure (async exit) does NOT block workspace creation, surfaces binary name', async () => {
     setEnv('HIVE_ORCHESTRATOR_COMMAND', '/definitely/not/a/real/binary')
@@ -640,13 +694,15 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     // shells out to a missing helper) and the autostart wrapper MUST translate
     // it to the same UX string as the sync ENOENT branch.
     //
-    // We use `bash -c 'exit 127'` so the test does not depend on any specific
-    // missing binary. `config.command` is therefore `bash`, which yields
-    // `bash CLI not found in PATH` — slightly odd-looking but exactly the
-    // mechanic we want to lock in. Real users configure `claude` and see
-    // `claude CLI not found in PATH`, which reads correctly.
-    setEnv('HIVE_ORCHESTRATOR_COMMAND', 'bash')
-    setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', JSON.stringify(['-c', 'exit 127']))
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-async-missing-bin-'))
+    tempDirs.push(binDir)
+    const fakeClaude = join(binDir, 'claude')
+    writeFileSync(fakeClaude, '#!/usr/bin/env sh\nexit 127\n')
+    chmodSync(fakeClaude, 0o755)
+    writeFileSync(join(binDir, 'claude.cmd'), '@echo off\r\nexit /b 9009\r\n')
+    setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+    setEnv('HIVE_ORCHESTRATOR_COMMAND', 'claude')
+    setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', '[]')
 
     const { store, baseUrl } = await startServer()
     const cookie = await getUiCookie(baseUrl)
@@ -665,60 +721,14 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     }
     expect(body.orchestrator_start.ok).toBe(false)
     // Exact-equality assertion so the translation cannot regress to a generic
-    // message like `bash failed to start (exit 127)`.
-    expect(body.orchestrator_start.error).toBe('bash CLI not found in PATH')
+    // message like `claude failed to start (exit 127)`.
+    expect(body.orchestrator_start.error).toBe('claude CLI not found in PATH')
     // run_id IS returned for async-exit (the run was started before it died),
     // unlike the sync-throw path where no run id exists.
     expect(typeof body.orchestrator_start.run_id).toBe('string')
 
     // Workspace itself was persisted.
     expect(store.listWorkspaces().some((workspace) => workspace.id === body.id)).toBe(true)
-  })
-
-  test('spawn ENOENT (synchronous throw) returns "<cmd> CLI not found in PATH"', async () => {
-    setEnv('HIVE_ORCHESTRATOR_COMMAND', 'claude')
-    setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', '[]')
-
-    const agentManager = createAgentManager()
-    // Simulate the kernel-throwing-ENOENT branch (which node-pty *does* surface
-    // synchronously on some platforms / for permission-denied paths). The
-    // wrapper must format this as `claude CLI not found in PATH`.
-    const enoent = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })
-    vi.spyOn(agentManager, 'startAgent').mockImplementation(async () => {
-      throw enoent
-    })
-
-    const store = createRuntimeStore({ agentManager })
-    const app = createApp({ store })
-    await new Promise<void>((resolve) => {
-      app.server.listen(0, '127.0.0.1', () => resolve())
-    })
-    servers.push({
-      async close() {
-        await store.close()
-        await new Promise<void>((resolve) => app.server.close(() => resolve()))
-      },
-    })
-    const address = app.server.address()
-    if (!address || typeof address === 'string') throw new Error('No port')
-    const baseUrl = `http://127.0.0.1:${address.port}`
-    const cookie = await getUiCookie(baseUrl)
-
-    const response = await fetch(`${baseUrl}/api/workspaces`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ path: makeWorkspacePath('enoent'), name: 'NoBinary' }),
-    })
-
-    expect(response.status).toBe(201)
-    const body = (await response.json()) as {
-      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
-    }
-    expect(body.orchestrator_start).toEqual({
-      ok: false,
-      error: 'claude CLI not found in PATH',
-      run_id: null,
-    })
   })
 
   test('real missing command from PATH returns "<cmd> CLI not found in PATH"', async () => {

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TeamListItem } from '../../../src/shared/types.js'
 import type { TerminalRunSummary } from '../api.js'
 import { isWorkspaceShellRun } from '../api.js'
-import { findRunByAgentId } from './useTerminalRuns.js'
 
 export type TerminalTab =
   | { id: string; kind: 'worker'; workerId: string; runId: string | null; label: string }
@@ -112,12 +111,14 @@ export const useTerminalPanelTabs = ({ workspaceId, workers, terminalRuns }: Par
   }, [activeId, workspaceId])
 
   const workerById = useMemo(() => new Map(workers.map((w) => [w.id, w] as const)), [workers])
-  const shellRunById = useMemo(() => {
-    const map = new Map<string, TerminalRunSummary>()
+  const { runByAgentId, shellRunById } = useMemo(() => {
+    const runByAgentId = new Map<string, TerminalRunSummary>()
+    const shellRunById = new Map<string, TerminalRunSummary>()
     for (const run of terminalRuns) {
-      if (isWorkspaceShellRun(run, workspaceId)) map.set(run.run_id, run)
+      runByAgentId.set(run.agent_id, run)
+      if (isWorkspaceShellRun(run, workspaceId)) shellRunById.set(run.run_id, run)
     }
-    return map
+    return { runByAgentId, shellRunById }
   }, [terminalRuns, workspaceId])
 
   const tabs = useMemo<TerminalTab[]>(() => {
@@ -127,7 +128,7 @@ export const useTerminalPanelTabs = ({ workspaceId, workers, terminalRuns }: Par
         const workerId = id.slice('worker:'.length)
         const worker = workerById.get(workerId)
         if (!worker) continue
-        const run = findRunByAgentId(terminalRuns, worker.id)
+        const run = runByAgentId.get(worker.id)
         out.push({
           id,
           kind: 'worker',
@@ -143,7 +144,7 @@ export const useTerminalPanelTabs = ({ workspaceId, workers, terminalRuns }: Par
       }
     }
     return out
-  }, [orderedIds, workerById, shellRunById, terminalRuns])
+  }, [orderedIds, workerById, runByAgentId, shellRunById])
 
   // GC ids whose referent is gone — only after we've observed at least one
   // populated snapshot for this workspace. Empty workers/runs is treated as

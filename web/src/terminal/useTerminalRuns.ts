@@ -2,11 +2,20 @@ import { useEffect, useState } from 'react'
 
 import { listTerminalRuns, type TerminalRunSummary } from '../api.js'
 
-const REFRESH_INTERVAL_MS = 500
+const STARTING_REFRESH_INTERVAL_MS = 500
+const STEADY_REFRESH_INTERVAL_MS = 2500
 const MAX_REFRESH_INTERVAL_MS = 5000
 
-const getRefreshDelay = (failureCount: number) =>
-  Math.min(REFRESH_INTERVAL_MS * 2 ** failureCount, MAX_REFRESH_INTERVAL_MS)
+const isStartingTerminalRun = (run: TerminalRunSummary) => run.status === 'starting'
+
+const getRefreshDelay = (failureCount: number, runs: TerminalRunSummary[]) => {
+  if (failureCount > 0) {
+    return Math.min(STARTING_REFRESH_INTERVAL_MS * 2 ** failureCount, MAX_REFRESH_INTERVAL_MS)
+  }
+  return runs.some(isStartingTerminalRun)
+    ? STARTING_REFRESH_INTERVAL_MS
+    : STEADY_REFRESH_INTERVAL_MS
+}
 
 export const orchestratorAgentId = (workspaceId: string) => `${workspaceId}:orchestrator`
 
@@ -36,9 +45,10 @@ export const useTerminalRuns = (workspaceId: string | null): TerminalRunSummary[
     let cancelled = false
     let failureCount = 0
     let inFlight = false
+    let lastRuns: TerminalRunSummary[] = []
     let timeout: number | undefined
     const scheduleNextLoad = () => {
-      if (!cancelled) timeout = window.setTimeout(loadRuns, getRefreshDelay(failureCount))
+      if (!cancelled) timeout = window.setTimeout(loadRuns, getRefreshDelay(failureCount, lastRuns))
     }
     const loadRuns = () => {
       if (inFlight) return
@@ -47,6 +57,7 @@ export const useTerminalRuns = (workspaceId: string | null): TerminalRunSummary[
         .then((runs) => {
           if (cancelled) return
           failureCount = 0
+          lastRuns = runs
           setTerminalRuns((current) => (areTerminalRunsEqual(current, runs) ? current : runs))
         })
         .catch((error: unknown) => {

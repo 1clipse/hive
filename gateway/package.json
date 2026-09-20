@@ -1,0 +1,32 @@
+{
+  "name": "@tt-a1i/hive-gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive remote-access gateway \u2014 opaque relay + OAuth identity. Public source, deployed separately from npm.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "jose": "^5.9.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.9.3",
+    "vitest": "3.2.4",
+    "wrangler": "^4.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "workerd",
+      "esbuild"
+    ]
+  },
+  "packageManager": "pnpm@10.30.3"
+}

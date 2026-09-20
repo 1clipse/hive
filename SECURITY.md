@@ -7,8 +7,7 @@ hosted service and does not provide a multi-user security boundary.
 
 | Version | Supported |
 | --- | --- |
-| Latest npm release | Security fixes accepted during public preview. |
-| 2.x | Best-effort fixes while the public preview is active. |
+| 0.6.x alpha | Security fixes accepted during public preview. |
 | Earlier versions | Not supported. |
 
 ## Reporting a Vulnerability
@@ -37,8 +36,8 @@ Please include:
 
 ## Local Runtime Safety
 
-- Hive binds to `127.0.0.1` by default. Do not expose the runtime port directly
-  to the internet or to an untrusted network.
+- Hive binds to `127.0.0.1` by default. Do not expose the runtime port to the
+  internet or to an untrusted network.
 - Built-in presets may pass each CLI's non-interactive or bypass flag so worker
   agents can continue without manual permission prompts.
 - Treat workers as able to run arbitrary shell commands with the permissions of
@@ -52,23 +51,9 @@ Please include:
 - Do not paste Hive agent tokens, terminal output, or workspace logs into public
   reports if they include private repository or machine details.
 
-## Remote Access Safety
-
-Remote access is optional and off by default. When enabled, a paired phone is a
-trusted device with the same authority as the local browser.
-
-- Pair only devices you control and revoke them when they are no longer needed.
-- Pairing must be confirmed at the desktop; do not approve a code you did not
-  initiate.
-- Remote access does not move your workspace or agent execution to the gateway.
-  The gateway relays authenticated traffic; your Hive runtime and CLI agents
-  still run on your machine.
-- If you suspect a device, browser profile, or gateway account is compromised,
-  disable Remote access, revoke paired devices, and restart Hive.
-
 ## Out of Scope for Public Preview
 
 - Running Hive as a shared server for multiple users.
-- Exposing the local Hive port through a public tunnel or reverse proxy.
+- Exposing Hive through a public tunnel or reverse proxy.
 - Operating Hive as a hardened production service.
 - Sandboxing third-party CLI agents beyond the controls provided by those CLIs.

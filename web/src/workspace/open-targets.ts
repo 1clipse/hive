@@ -7,6 +7,7 @@ import {
   type OpenTargetPlatform,
 } from '../../../src/shared/open-targets.js'
 import cursorIcon from '../assets/open-targets/cursor.svg'
+import fileExplorerIcon from '../assets/open-targets/file-explorer.svg'
 import finderIcon from '../assets/open-targets/finder.png'
 import ghosttyIcon from '../assets/open-targets/ghostty.png'
 import terminalIcon from '../assets/open-targets/terminal.svg'
@@ -50,6 +51,13 @@ const FINDER_LABEL_KEY_BY_PLATFORM: Record<OpenTargetPlatform, OpenTargetOption[
   other: 'openWorkspace.target.finder.linux',
 }
 
+const FINDER_ICON_BY_PLATFORM: Record<OpenTargetPlatform, string> = {
+  mac: finderIcon,
+  windows: fileExplorerIcon,
+  linux: fileExplorerIcon,
+  other: fileExplorerIcon,
+}
+
 const TARGET_DATA: Record<OpenTargetId, Omit<OpenTargetOption, 'id'>> = {
   vscode: { labelKey: 'openWorkspace.target.vscode', iconSrc: vscodeIcon },
   'vscode-insiders': {
@@ -73,6 +81,9 @@ const resolveLabelKey = (
 ): OpenTargetOption['labelKey'] =>
   targetId === 'finder' ? FINDER_LABEL_KEY_BY_PLATFORM[platform] : TARGET_DATA[targetId].labelKey
 
+const resolveIconSrc = (targetId: OpenTargetId, platform: OpenTargetPlatform): string =>
+  targetId === 'finder' ? FINDER_ICON_BY_PLATFORM[platform] : TARGET_DATA[targetId].iconSrc
+
 export const getOpenTargetOption = (
   targetId: OpenTargetId,
   platform: OpenTargetPlatform
@@ -83,7 +94,7 @@ export const getOpenTargetOption = (
   const data = TARGET_DATA[supportedId]
   return {
     id: supportedId,
-    iconSrc: data.iconSrc,
+    iconSrc: resolveIconSrc(supportedId, platform),
     labelKey: resolveLabelKey(supportedId, platform),
     ...(data.iconScale !== undefined ? { iconScale: data.iconScale } : {}),
   }
@@ -94,7 +105,7 @@ export const getOpenTargetOptions = (platform: OpenTargetPlatform): readonly Ope
     const data = TARGET_DATA[targetId]
     return {
       id: targetId,
-      iconSrc: data.iconSrc,
+      iconSrc: resolveIconSrc(targetId, platform),
       labelKey: resolveLabelKey(targetId, platform),
       ...(data.iconScale !== undefined ? { iconScale: data.iconScale } : {}),
     }

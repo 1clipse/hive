@@ -1,10 +1,10 @@
 # Source attribution
 
-This directory mirrors [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents) at commit `783f6a72bfd7f3135700ac273c619d92821b419a`.
+This directory mirrors [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents) at commit `00fb28a4cf60a719363dce0de67fafc6301857ce`.
 
 - Language: en
-- Agents: 184
-- Synced: 2026-05-22T12:26:20.094Z
+- Agents: 255
+- Synced: 2026-07-13T13:18:00.945Z
 - License: MIT (see LICENSE in this directory)
 
 All markdown content is unmodified from upstream. Hive only filters out top-level

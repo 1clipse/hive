@@ -20,7 +20,7 @@ type Props = {
   workers?: readonly TeamListItem[]
   /**
    * Cross-pane jump handler. Called when the user clicks an `@<name>` chip in
-   * the drawer; parent typically scrolls the matching worker card into view
+   * the dialog; parent typically scrolls the matching worker card into view
    * and applies a transient highlight. Hover behavior is intentionally
    * pure-CSS (no scroll) — see §6.6.6.
    */
@@ -46,7 +46,7 @@ export const WorkspaceTaskDrawer = ({
   onSelectOwner,
   connectionStale,
 }: Props) => {
-  // Map down to bare names for the drawer; the drawer doesn't need any other
+  // Map down to bare names for the task dialog; it doesn't need any other
   // worker metadata (status/role/etc) — its chip parser is name-only. An empty
   // roster is collapsed to `undefined` so the parser falls back to permissive
   // mode (any `@token` chips). The "explicit empty = strict" branch stays

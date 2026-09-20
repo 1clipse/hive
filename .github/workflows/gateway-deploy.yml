@@ -1,0 +1,84 @@
+# Deploy the remote-access gateway from the public source repository.
+# gateway/ is deployed separately and is never included in the npm package.
+#
+#   deploy-gateway  — manual (workflow_dispatch). Installs gateway deps and runs `wrangler deploy`
+#                     (cwd gateway/). Gated on the gateway test suite passing first.
+#
+# Release tags can opt into a matching web bundle through release.yml. That job is independent
+# of npm publishing; verify gateway deployment separately before announcing remote availability.
+#
+# Secrets required in this repo's Actions settings (owner sets them once):
+#   CLOUDFLARE_API_TOKEN   — scoped token: Workers Scripts:Edit, D1:Edit, Workers R2 Storage:Edit.
+#   CLOUDFLARE_ACCOUNT_ID  — the Cloudflare account the worker lives in.
+# The five worker secrets (GITHUB_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, JWT_SIGNING_SECRET)
+# are NOT in CI — they are set out-of-band with `wrangler secret put` (see docs/deploy-runbook.md).
+# This workflow never reads or echoes them.
+
+name: Gateway Deploy
+
+on:
+  # Deploying the worker is owner-gated and explicit — never on a push. Trigger it from the Actions
+  # tab. `confirm` is a typed guard so an accidental click can't ship to prod.
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm a production wrangler deploy of the gateway.'
+        required: true
+        default: ''
+permissions:
+  contents: read
+
+jobs:
+  # ── Manual production deploy of the Worker ───────────────────────────────────────────────────
+  deploy-gateway:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    # A repo "environment" lets the owner require a manual approval before the deploy job runs and
+    # scope the Cloudflare secrets to it. Create it once in Settings → Environments.
+    environment: gateway-production
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: gateway/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      # Gate: typecheck + the full gateway suite (real workerd via vitest-pool-workers) must pass
+      # before we touch prod. A red suite must never deploy.
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # Refuse to deploy with the placeholder database_id still in wrangler.toml — that means the
+      # owner skipped `wrangler d1 create` and the worker would bind to nothing.
+      - name: Guard against unconfigured database_id
+        run: |
+          if grep -q 'placeholder-set-after-wrangler-d1-create' wrangler.toml; then
+            echo "::error::wrangler.toml still has the placeholder database_id. Run 'wrangler d1 create hive-gateway' and paste the id in first (see docs/deploy-runbook.md)."
+            exit 1
+          fi
+
+      # Apply any pending D1 migrations to the remote (prod) database, then deploy. migrations_dir
+      # in wrangler.toml points at gateway/migrations (0001_init.sql, 0002_pairing.sql, …).
+      - name: Apply D1 migrations (remote)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: gateway
+          command: d1 migrations apply hive-gateway --remote
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: gateway
+          command: deploy

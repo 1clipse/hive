@@ -5,6 +5,7 @@ import {
   createWorkspace,
   type OrchestratorStartResult,
 } from './api.js'
+import { useI18n } from './i18n.js'
 import type { WorkspaceCreateInput } from './workspace/workspace-create-input.js'
 
 interface UseWorkspaceCreateInput {
@@ -12,13 +13,12 @@ interface UseWorkspaceCreateInput {
   onWorkspaceCreated: (workspace: WorkspaceSummary) => void
   /** Surface server / network errors so the caller can toast them. */
   onError?: (message: string) => void
+  onOrchestratorRunStarted?: (workspaceId: string, runId: string) => void
 }
 
 interface UseWorkspaceCreateOutput {
   /** workspaceId → sticky autostart error (cleared on Retry). */
   orchestratorAutostartErrors: Record<string, string | null>
-  /** workspaceId → recent server-side autostart run id; used only to avoid immediate duplicate starts. */
-  orchestratorAutostartRunIds: Record<string, string | null>
   recordOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   createNewWorkspace: (input: WorkspaceCreateInput) => Promise<CreateWorkspaceResponse>
 }
@@ -31,16 +31,17 @@ interface UseWorkspaceCreateOutput {
 export const useWorkspaceCreate = ({
   onWorkspaceCreated,
   onError,
+  onOrchestratorRunStarted,
 }: UseWorkspaceCreateInput): UseWorkspaceCreateOutput => {
+  const { language } = useI18n()
   const [orchestratorAutostartErrors, setErrors] = useState<Record<string, string | null>>({})
-  const [orchestratorAutostartRunIds, setRunIds] = useState<Record<string, string | null>>({})
 
   const recordOrchestratorResult = useCallback(
     (workspaceId: string, result: OrchestratorStartResult) => {
       setErrors((current) => ({ ...current, [workspaceId]: result.ok ? null : result.error }))
-      setRunIds((current) => ({ ...current, [workspaceId]: result.ok ? result.run_id : null }))
+      if (result.ok && result.run_id) onOrchestratorRunStarted?.(workspaceId, result.run_id)
     },
-    []
+    [onOrchestratorRunStarted]
   )
 
   const createNewWorkspace = useCallback(
@@ -49,12 +50,23 @@ export const useWorkspaceCreate = ({
         const response = await createWorkspace({
           name: input.name,
           path: input.path,
-          autostart_orchestrator: true,
+          ...(input.controllerMode === 'codex_app'
+            ? { controller_mode: 'codex_app' as const }
+            : {}),
+          autostart_orchestrator: input.controllerMode !== 'codex_app',
           command_preset_id: input.commandPresetId,
           startup_command: input.startupCommand ?? null,
+          ui_language: language,
         })
         recordOrchestratorResult(response.id, response.orchestrator_start)
-        onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })
+        onWorkspaceCreated({
+          id: response.id,
+          name: response.name,
+          path: response.path,
+          ...(input.controllerMode === 'codex_app'
+            ? { controller_mode: 'codex_app' as const }
+            : {}),
+        })
         return response
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to create workspace'
@@ -62,12 +74,11 @@ export const useWorkspaceCreate = ({
         throw error
       }
     },
-    [onWorkspaceCreated, onError, recordOrchestratorResult]
+    [language, onWorkspaceCreated, onError, recordOrchestratorResult]
   )
 
   return {
     orchestratorAutostartErrors,
-    orchestratorAutostartRunIds,
     recordOrchestratorResult,
     createNewWorkspace,
   }

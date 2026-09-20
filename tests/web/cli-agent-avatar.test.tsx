@@ -15,6 +15,7 @@ describe('CliAgentAvatar — known preset renders the brand logo', () => {
     ['claude', '/cli-icons/claude.png'],
     ['codex', '/cli-icons/codex.png'],
     ['gemini', '/cli-icons/gemini.png'],
+    ['hermes', '/cli-icons/hermes.png'],
     ['opencode', '/cli-icons/opencode.svg'],
   ])('preset %s → %s', (presetId, expectedSrc) => {
     render(<CliAgentAvatar commandPresetId={presetId} workerRole="coder" />)
@@ -23,6 +24,17 @@ describe('CliAgentAvatar — known preset renders the brand logo', () => {
     const img = avatar.querySelector('img')
     expect(img?.getAttribute('src')).toBe(expectedSrc)
     expect(img?.getAttribute('decoding')).toBe('sync')
+  })
+})
+
+describe('CliAgentAvatar — custom override', () => {
+  test('custom avatar takes precedence over the preset logo', () => {
+    const avatar = 'data:image/png;base64,abc123'
+    render(<CliAgentAvatar commandPresetId="claude" customAvatar={avatar} workerRole="coder" />)
+
+    expect(screen.queryByTestId('cli-agent-avatar')).toBeNull()
+    const custom = screen.getByTestId('custom-agent-avatar')
+    expect(custom.querySelector('img')?.getAttribute('src')).toBe(avatar)
   })
 })
 

@@ -1,10 +1,11 @@
-import type { Database } from 'better-sqlite3'
-import type { AgentSummary } from '../shared/types.js'
+import type { AgentSummary, WorkerSpawnSource } from '../shared/types.js'
 import { getDefaultRoleDescription } from './role-templates.js'
+import type { Database } from './sqlite.js'
 import type { WorkspaceRecord } from './workspace-store-contract.js'
 import {
   applyPendingTaskCount,
   createOrchestrator,
+  createWorkflowAgent,
   isWorkerAgent,
   type MessageKindRecord,
   type WorkerRow,
@@ -14,7 +15,8 @@ import {
 
 const createWorkerSummary = (
   workspaceId: string,
-  row: Pick<WorkerRow, 'description' | 'id' | 'name' | 'role'>
+  row: Pick<WorkerRow, 'description' | 'id' | 'name' | 'role'> &
+    Partial<Pick<WorkerRow, 'avatar' | 'ephemeral' | 'spawned_by'>>
 ): AgentSummary => ({
   id: row.id,
   workspaceId,
@@ -23,7 +25,39 @@ const createWorkerSummary = (
   role: row.role,
   status: 'stopped',
   pendingTaskCount: 0,
+  ...(row.avatar ? { avatar: row.avatar } : {}),
+  ephemeral: row.ephemeral === 1,
+  spawnedBy: (row.spawned_by as WorkerSpawnSource | null | undefined) ?? null,
 })
+
+/**
+ * Build the worker SELECT defensively. The global runtime data dir
+ * (`~/.config/hive`) is shared across every Hive install on the machine, so a
+ * DB may have been migrated forward by a NEWER Hive whose `schema_version`
+ * already lists 19+. In that case our own v19 ALTER is skipped and the
+ * `workers` table can lack `ephemeral`/`spawned_by`. Selecting a non-existent
+ * column throws and crashes startup, so we only request the optional columns
+ * when they actually exist; `createWorkerSummary` defaults them otherwise.
+ */
+const buildWorkerSelect = (db: Database, whereClause: string): string => {
+  const present = new Set(
+    (db.prepare('PRAGMA table_info(workers)').all() as Array<{ name: string }>).map((c) => c.name)
+  )
+  const optional = ['avatar', 'ephemeral', 'spawned_by'].filter((column) => present.has(column))
+  const columns = ['id', 'workspace_id', 'name', 'description', 'role', ...optional].join(', ')
+  const where = whereClause ? `${whereClause} ` : ''
+  return `SELECT ${columns} FROM workers ${where}ORDER BY created_at ASC`
+}
+
+// The workspace reader also supports legacy/shared schemas, just like the
+// worker-column projection above. Absence of controller_mode means internal.
+const buildWorkspaceSelect = (db: Database, suffix: string) => {
+  const columns = db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
+  const mode = columns.some((column) => column.name === 'controller_mode')
+    ? 'controller_mode'
+    : "'internal' AS controller_mode"
+  return `SELECT id, name, path, ${mode} FROM workspaces ${suffix}`
+}
 
 const applyMessageKinds = (
   workspaces: Map<string, WorkspaceRecord>,
@@ -56,7 +90,7 @@ export const hydrateWorkspaceFromDb = (
     return
   }
 
-  const row = db.prepare('SELECT id, name, path FROM workspaces WHERE id = ?').get(workspaceId) as
+  const row = db.prepare(buildWorkspaceSelect(db, 'WHERE id = ?')).get(workspaceId) as
     | WorkspaceSummaryRow
     | undefined
   if (!row) {
@@ -64,14 +98,17 @@ export const hydrateWorkspaceFromDb = (
   }
 
   workspaces.set(row.id, {
-    summary: { id: row.id, name: row.name, path: row.path },
-    agents: [createOrchestrator(row.id)],
+    summary: {
+      id: row.id,
+      name: row.name,
+      path: row.path,
+      ...(row.controller_mode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
+    },
+    agents: [createOrchestrator(row.id), createWorkflowAgent(row.id)],
   })
 
   for (const workerRow of db
-    .prepare(
-      'SELECT id, workspace_id, name, description, role FROM workers WHERE workspace_id = ? ORDER BY created_at ASC'
-    )
+    .prepare(buildWorkerSelect(db, 'WHERE workspace_id = ?'))
     .all(workspaceId) as WorkerRow[]) {
     workspaces.get(workspaceId)?.agents.push(createWorkerSummary(workerRow.workspace_id, workerRow))
   }
@@ -85,19 +122,20 @@ export const seedWorkspacesFromDb = (
   messageKinds: MessageKindRecord[]
 ) => {
   for (const row of db
-    .prepare('SELECT id, name, path FROM workspaces ORDER BY created_at ASC')
+    .prepare(buildWorkspaceSelect(db, 'ORDER BY created_at ASC'))
     .all() as WorkspaceRow[]) {
     workspaces.set(row.id, {
-      summary: { id: row.id, name: row.name, path: row.path },
-      agents: [createOrchestrator(row.id)],
+      summary: {
+        id: row.id,
+        name: row.name,
+        path: row.path,
+        ...(row.controller_mode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
+      },
+      agents: [createOrchestrator(row.id), createWorkflowAgent(row.id)],
     })
   }
 
-  for (const row of db
-    .prepare(
-      'SELECT id, workspace_id, name, description, role FROM workers ORDER BY created_at ASC'
-    )
-    .all() as WorkerRow[]) {
+  for (const row of db.prepare(buildWorkerSelect(db, '')).all() as WorkerRow[]) {
     workspaces.get(row.workspace_id)?.agents.push(createWorkerSummary(row.workspace_id, row))
   }
 

@@ -9,6 +9,8 @@ import { ToastProvider } from '../../web/src/ui/useToast.js'
 import { AddWorkerDialog } from '../../web/src/worker/AddWorkerDialog.js'
 import { useWorkerComposer } from '../../web/src/worker/useWorkerComposer.js'
 
+const MARKETPLACE_DRAWER_TIMEOUT_MS = 10_000
+
 const {
   createRoleTemplate,
   deleteRoleTemplate,
@@ -53,11 +55,13 @@ const Harness = ({ onSubmitCapture }: { onSubmitCapture?: (snapshot: unknown) =>
     <ToastProvider>
       <Toaster />
       <AddWorkerDialog
+        avatar={composer.avatar}
         commandPresets={composer.commandPresets}
         commandPresetId={composer.commandPresetId}
         creating={composer.creating}
         customTemplates={composer.customTemplates}
         onApplyMarketplaceImport={composer.applyMarketplaceImport}
+        onAvatarChange={composer.setAvatar}
         onClose={() => {}}
         onDeleteTemplate={composer.deleteTemplate}
         onNameChange={composer.setWorkerName}
@@ -141,19 +145,37 @@ afterEach(() => {
 })
 
 describe('AddWorkerDialog marketplace integration', () => {
-  test('clicking Browse marketplace opens the drawer', async () => {
+  test('does not load the marketplace manifest until the drawer is opened', async () => {
     render(<Harness />)
-    fireEvent.click(screen.getByTestId('open-marketplace'))
-    await waitFor(() => {
-      expect(screen.getByTestId('marketplace-content')).toBeInTheDocument()
-    })
+
+    await waitFor(() => expect(listCommandPresets).toHaveBeenCalled())
+    expect(fetchMarketplaceManifest).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('marketplace-content')).not.toBeInTheDocument()
   })
+
+  test(
+    'clicking Browse marketplace opens the drawer',
+    async () => {
+      render(<Harness />)
+      fireEvent.click(screen.getByTestId('open-marketplace'))
+      expect(
+        await screen.findByTestId('marketplace-content', undefined, {
+          timeout: MARKETPLACE_DRAWER_TIMEOUT_MS,
+        })
+      ).toBeInTheDocument()
+    },
+    MARKETPLACE_DRAWER_TIMEOUT_MS + 2_000
+  )
 
   test('importing an agent shows a success toast with the agent name', async () => {
     render(<Harness />)
 
     fireEvent.click(screen.getByTestId('open-marketplace'))
-    await waitFor(() => expect(screen.getByText('Code Reviewer')).toBeInTheDocument())
+    expect(
+      await screen.findByText('Code Reviewer', undefined, {
+        timeout: MARKETPLACE_DRAWER_TIMEOUT_MS,
+      })
+    ).toBeInTheDocument()
     fireEvent.click(screen.getByText('Code Reviewer'))
     const importButton = await screen.findByTestId('marketplace-import-button')
     await waitFor(() => expect(importButton).not.toBeDisabled())
@@ -168,9 +190,11 @@ describe('AddWorkerDialog marketplace integration', () => {
     render(<Harness onSubmitCapture={submitCapture} />)
 
     fireEvent.click(screen.getByTestId('open-marketplace'))
-    await waitFor(() => {
-      expect(screen.getByText('Code Reviewer')).toBeInTheDocument()
-    })
+    expect(
+      await screen.findByText('Code Reviewer', undefined, {
+        timeout: MARKETPLACE_DRAWER_TIMEOUT_MS,
+      })
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Code Reviewer'))
     const importButton = await screen.findByTestId('marketplace-import-button')

@@ -1,3 +1,4 @@
+import { classifyCompletedRunStatus } from './agent-exit-classification.js'
 import type { AgentRunSnapshot } from './agent-manager.js'
 import type { PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
@@ -15,11 +16,23 @@ interface AgentRunSyncStore {
 
 const MAX_RUN_OUTPUT_LENGTH = 1_000_000
 
-const toPersistedStatus = (run: Pick<AgentRunSnapshot, 'status'> & { exitCode: number | null }) => {
+type RunStatusInput = Pick<AgentRunSnapshot, 'status'> & {
+  exitCode: number | null
+  userStopped?: boolean
+}
+
+const toPersistedStatus = (run: RunStatusInput) => {
+  if (
+    'userStopped' in run &&
+    run.userStopped === true &&
+    (run.status === 'error' || run.status === 'exited')
+  ) {
+    return 'exited'
+  }
   if (run.status === 'error' || run.status === 'exited' || run.status === 'starting') {
     return run.status
   }
-  return run.exitCode === null ? 'running' : run.exitCode === 0 ? 'exited' : 'error'
+  return run.exitCode === null ? 'running' : classifyCompletedRunStatus(run.exitCode)
 }
 
 export const syncPersistedRun = (
@@ -27,21 +40,19 @@ export const syncPersistedRun = (
   snapshot: AgentRunSnapshot,
   store: AgentRunSyncStore
 ) => {
-  const nextStatus = toPersistedStatus(snapshot)
+  const nextStatus = toPersistedStatus(
+    run.userStopped ? { ...snapshot, userStopped: true } : snapshot
+  )
   const output = snapshot.output.slice(-MAX_RUN_OUTPUT_LENGTH)
   if (run.status === nextStatus && run.exitCode === snapshot.exitCode && run.output === output) {
     return run
   }
 
+  const endedAt = nextStatus === 'exited' || nextStatus === 'error' ? Date.now() : null
+  store.updatePersistedRun(run.runId, nextStatus, snapshot.exitCode, endedAt)
   run.status = nextStatus
   run.output = output
   run.exitCode = snapshot.exitCode
-  store.updatePersistedRun(
-    run.runId,
-    nextStatus,
-    snapshot.exitCode,
-    nextStatus === 'exited' || nextStatus === 'error' ? Date.now() : null
-  )
   return run
 }
 
@@ -51,7 +62,8 @@ export const completeLiveRun = (
   endedAt: number,
   store: AgentRunSyncStore
 ) => {
-  run.status = exitCode === 0 ? 'exited' : 'error'
+  const nextStatus = run.userStopped ? 'exited' : classifyCompletedRunStatus(exitCode)
+  store.updatePersistedRun(run.runId, nextStatus, exitCode, endedAt)
+  run.status = nextStatus
   run.exitCode = exitCode
-  store.updatePersistedRun(run.runId, run.status, exitCode, endedAt)
 }

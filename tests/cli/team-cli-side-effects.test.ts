@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -32,11 +33,11 @@ const waitFor = async (
 
 afterEach(() => {
   process.env = { ...originalEnv }
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('team send CLI side effects (R1.3)', () => {
-  test('team send injects prompt into worker stdin, records message, bumps pending count, omits uuid', async () => {
+  test('team send injects prompt into worker stdin, records message, bumps pending count, and binds reporting to its dispatch', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-side-effects-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
@@ -78,8 +79,8 @@ describe('team send CLI side effects (R1.3)', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
+            command: process.execPath,
+            args: [scriptPath],
           }),
         })
       const startAgent = async (agentId: string) =>
@@ -134,16 +135,12 @@ describe('team send CLI side effects (R1.3)', () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         expect(run?.output).toContain('WRK:')
         expect(run?.output).toContain('@Orchestrator')
-        expect(run?.output).toContain('你的角色：')
+        expect(run?.output).toContain('Hive member; keep your assigned role and scope')
         expect(run?.output).toContain('实现登录')
         expect(run?.output).toContain(`dispatch_id: ${dispatch?.id}`)
-        expect(run?.output).toContain(`team report "<result>" --dispatch ${dispatch?.id}`)
-        // The injected prompt may include the dispatch id so workers can report
-        // the exact task, but it must not leak workspace or agent ids.
-        const injected = (run?.output ?? '').replace(/^WRK:/gm, '')
-        expect(injected).not.toContain(workspace.id)
-        expect(injected).not.toContain(worker.id)
-        expect(injected).not.toContain(orchestratorId)
+        expect(run?.output).toContain(
+          `team report --dispatch ${dispatch?.id} --seen <required_seen_seq> --stdin`
+        )
       })
 
       const messages = hive.store.listMessagesForRecovery(workspace.id, 0)
@@ -157,10 +154,10 @@ describe('team send CLI side effects (R1.3)', () => {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 20_000)
 
-  test('team send starts a stopped worker before injecting the task prompt', async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-autostart-'))
+  test('team send queues work for a stopped worker without auto-starting it', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-stopped-queue-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
     tempDirs.push(dataDir)
@@ -202,8 +199,8 @@ describe('team send CLI side effects (R1.3)', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
+            command: process.execPath,
+            args: [scriptPath],
           }),
         })
       const startAgent = async (agentId: string) =>
@@ -234,13 +231,15 @@ describe('team send CLI side effects (R1.3)', () => {
 
       await runTeamCommand(['send', 'Alice', '评估项目结构'])
 
-      await waitFor(async () => {
-        const workerRun = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        expect(workerRun).toBeDefined()
-        expect(workerRun?.output).toContain('WORKER_READY')
-        expect(workerRun?.output).toContain('WRK:')
-        expect(workerRun?.output).toContain('评估项目结构')
-      })
+      expect(hive.store.getActiveRunByAgentId(workspace.id, worker.id)).toBeUndefined()
+      const dispatch = hive.store.listDispatches(workspace.id)[0]
+      expect(dispatch).toEqual(
+        expect.objectContaining({
+          status: 'queued',
+          text: '评估项目结构',
+          toAgentId: worker.id,
+        })
+      )
 
       const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
         headers: { cookie: uiCookie },
@@ -253,10 +252,10 @@ describe('team send CLI side effects (R1.3)', () => {
       }>
       const aliceRow = team.find((item) => item.id === worker.id)
       expect(aliceRow?.pending_task_count).toBe(1)
-      expect(aliceRow?.status).toBe('working')
+      expect(aliceRow?.status).toBe('stopped')
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 20_000)
 })

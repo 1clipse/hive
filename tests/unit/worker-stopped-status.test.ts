@@ -1,5 +1,5 @@
 import '../helpers/mock-node-pty.ts'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,8 +7,10 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20) => {
   const deadline = Date.now() + timeoutMs
@@ -27,9 +29,10 @@ const waitFor = async (assertion: () => void, timeoutMs = 1500, intervalMs = 20)
   throw lastError
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map((store) => store.close()))
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -47,12 +50,13 @@ describe('worker stopped status (unit)', () => {
       agentManager: createAgentManager(),
       dataDir,
     })
+    stores.push(store)
 
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
 
     store.configureAgentLaunch(workspace.id, worker.id, {
-      command: 'node',
+      command: process.execPath,
       args: [scriptPath],
     })
 

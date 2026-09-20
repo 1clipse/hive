@@ -20,7 +20,7 @@ const readPathParam = (request: { url?: string | undefined }) => {
 
 export const marketplaceRoutes: RouteDefinition[] = [
   route('GET', '/api/marketplace/manifest', ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const lang = readLanguageParam(request)
     if (!isMarketplaceLanguage(lang)) {
       sendJson(response, 400, { error: 'Invalid or missing lang parameter (expected en|zh)' })
@@ -37,7 +37,7 @@ export const marketplaceRoutes: RouteDefinition[] = [
     }
   }),
   route('GET', '/api/marketplace/agent', ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const lang = readLanguageParam(request)
     if (!isMarketplaceLanguage(lang)) {
       sendJson(response, 400, { error: 'Invalid or missing lang parameter (expected en|zh)' })

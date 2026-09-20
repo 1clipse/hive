@@ -1,14 +1,13 @@
 import '../helpers/mock-node-pty.ts'
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import { createAgentRunStore } from '../../src/server/agent-run-store.js'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
+import Database from '../../src/server/sqlite.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const outputBus = {
   clear: () => {},
@@ -26,7 +25,7 @@ const tempDirs: string[] = []
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
   vi.restoreAllMocks()
 })
@@ -65,7 +64,11 @@ describe('agent runtime stability (unit)', () => {
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
-          { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: { command: process.execPath, args: [] },
+          },
         ],
         deleteLaunchConfig: () => {},
         markUnfinishedRunsStale: () => {},
@@ -124,7 +127,7 @@ describe('agent runtime stability (unit)', () => {
     ).run(
       'ws-1',
       'agent-1',
-      '/bin/bash',
+      process.execPath,
       '{bad json',
       null,
       null,
@@ -144,9 +147,10 @@ describe('agent runtime stability (unit)', () => {
         workspaceId: 'ws-1',
         agentId: 'agent-1',
         config: {
-          command: '/bin/bash',
+          command: process.execPath,
           args: [],
           commandPresetId: null,
+          cwd: null,
           interactiveCommand: null,
           presetAugmentationDisabled: false,
           resumeArgsTemplate: null,

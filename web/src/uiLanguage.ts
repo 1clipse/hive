@@ -1,6 +1,3 @@
-export type UiLanguage = 'en' | 'zh'
+export { isUiLanguage, type UiLanguage } from '../../src/shared/ui-language.js'
 
 export const UI_LANGUAGE_STORAGE_KEY = 'hive.uiLanguage'
-
-export const isUiLanguage = (value: string | null): value is UiLanguage =>
-  value === 'en' || value === 'zh'

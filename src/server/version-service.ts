@@ -1,11 +1,19 @@
 import { PACKAGE_NAME, readPackageVersion } from './package-version.js'
+import {
+  createUpdateInstallPlan,
+  type UpdateInstallPlan,
+  type UpdateInstallSource,
+} from './update-install-plan.js'
 
 export interface VersionInfoPayload {
+  can_run_hive_update: boolean
   current_version: string
   install_hint: string
+  install_source: UpdateInstallSource
   latest_version: string
   package_name: string
   release_url: string
+  update_note: string
   update_available: boolean
 }
 
@@ -42,23 +50,34 @@ export const compareVersions = (left: string, right: string) => {
   return a.prerelease.localeCompare(b.prerelease, undefined, { numeric: true })
 }
 
-const buildVersionInfo = (currentVersion: string, latestVersion: string): VersionInfoPayload => ({
-  current_version: currentVersion,
-  // Show `hive update` as the primary upgrade path now that the subcommand
-  // exists; it prints the npm fallback if its own spawn fails, so users
-  // running on Windows / Linux without a working npm in PATH still recover.
-  install_hint: 'hive update',
-  latest_version: latestVersion,
-  package_name: PACKAGE_NAME,
-  release_url: `https://www.npmjs.com/package/${PACKAGE_NAME}/v/${latestVersion}`,
-  update_available: compareVersions(latestVersion, currentVersion) > 0,
-})
+const buildVersionInfo = (
+  currentVersion: string,
+  latestVersion: string,
+  updatePlan: UpdateInstallPlan
+): VersionInfoPayload => {
+  return {
+    can_run_hive_update: updatePlan.canRunHiveUpdate,
+    current_version: currentVersion,
+    install_hint: updatePlan.installCommand,
+    install_source: updatePlan.installSource,
+    latest_version: latestVersion,
+    package_name: PACKAGE_NAME,
+    release_url: `https://www.npmjs.com/package/${PACKAGE_NAME}/v/${latestVersion}`,
+    update_available: compareVersions(latestVersion, currentVersion) > 0,
+    update_note: updatePlan.note,
+  }
+}
 
 export const createVersionService = (
-  options: { fetchLatestVersion?: () => Promise<string>; now?: () => number } = {}
+  options: {
+    createUpdateInstallPlan?: () => UpdateInstallPlan
+    fetchLatestVersion?: () => Promise<string>
+    now?: () => number
+  } = {}
 ): VersionService => {
   const currentVersion = readPackageVersion()
   const now = options.now ?? Date.now
+  const planUpdateInstall = options.createUpdateInstallPlan ?? createUpdateInstallPlan
   const fetchLatestVersion =
     options.fetchLatestVersion ??
     (async () => {
@@ -79,11 +98,11 @@ export const createVersionService = (
       if (cached && cached.expiresAt > currentTime) return cached.info
       try {
         const latestVersion = await fetchLatestVersion()
-        const info = buildVersionInfo(currentVersion, latestVersion)
+        const info = buildVersionInfo(currentVersion, latestVersion, planUpdateInstall())
         cached = { expiresAt: currentTime + VERSION_CACHE_MS, info }
         return info
       } catch {
-        const info = buildVersionInfo(currentVersion, currentVersion)
+        const info = buildVersionInfo(currentVersion, currentVersion, planUpdateInstall())
         cached = { expiresAt: currentTime + VERSION_CACHE_MS, info }
         return info
       }

@@ -11,7 +11,7 @@ describe('cancel dispatch', () => {
 
     const dispatch = await store.dispatchTask(workspace.id, worker.id, 'Front-end scan')
 
-    const result = store.cancelTask(workspace.id, dispatch.id, {
+    const result = await store.cancelTask(workspace.id, dispatch.id, {
       fromAgentId: `${workspace.id}:orchestrator`,
       reason: 'Direction changed',
     })
@@ -21,6 +21,8 @@ describe('cancel dispatch', () => {
       reportText: 'Direction changed',
       status: 'cancelled',
     })
+    expect(result.forwarded).toBe(false)
+    expect(result.forwardError).toBeTruthy()
     expect(store.getWorker(workspace.id, worker.id)).toMatchObject({
       pendingTaskCount: 0,
       status: 'idle',
@@ -36,7 +38,7 @@ describe('cancel dispatch', () => {
     const first = await store.dispatchTask(workspace.id, worker.id, 'Old task')
     const second = await store.dispatchTask(workspace.id, worker.id, 'New task')
 
-    store.cancelTask(workspace.id, first.id, {
+    await store.cancelTask(workspace.id, first.id, {
       fromAgentId: `${workspace.id}:orchestrator`,
       reason: 'Superseded',
     })

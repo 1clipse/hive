@@ -20,8 +20,14 @@ export const readCookie = (cookieHeader: string | undefined, name: string) => {
 
 export const requireUiTokenFromRequest = (
   request: IncomingMessage,
-  validateUiToken: RuntimeStore['validateUiToken']
+  validateUiToken: RuntimeStore['validateUiToken'],
+  authorizeTunnel?: RuntimeStore['authorizeRemoteTunnelRequest']
 ) => {
+  // Tunnel-originated requests carry the per-boot secret and short-circuit here
+  // (invariant 2). A request with no secret header — every browser, every
+  // existing test — gets authorizeTunnel === false and falls straight to the
+  // cookie path, so cookie behavior is byte-identical (invariant 4).
+  if (authorizeTunnel?.(request)) return
   const cookieHeader = Array.isArray(request.headers.cookie)
     ? request.headers.cookie.join('; ')
     : request.headers.cookie

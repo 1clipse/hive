@@ -53,7 +53,11 @@ describe('agent runtime races (unit)', () => {
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
-          { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: { command: process.execPath, args: [] },
+          },
         ],
         deleteLaunchConfig: () => {},
         markUnfinishedRunsStale: () => {},
@@ -157,7 +161,11 @@ describe('agent runtime races (unit)', () => {
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
-          { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: { command: process.execPath, args: [] },
+          },
         ],
         deleteLaunchConfig: () => {},
         markUnfinishedRunsStale: () => {},
@@ -222,7 +230,11 @@ describe('agent runtime races (unit)', () => {
         },
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
-          { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: { command: process.execPath, args: [] },
+          },
         ],
         deleteLaunchConfig: () => {},
         markUnfinishedRunsStale: () => {},

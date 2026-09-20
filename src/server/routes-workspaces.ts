@@ -1,58 +1,88 @@
 import type { IncomingMessage } from 'node:http'
 
-import {
-  resolveCommandPresetLaunchConfig,
-  resolveStartupCommandLaunchConfig,
-} from './agent-launch-resolver.js'
-import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
+import type { TeamListOpenDispatchPayload } from '../shared/types.js'
+
+import { BadRequestError, PtyInactiveError } from './http-errors.js'
+import { autostartOrchestrator } from './orchestrator-autostart.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
-import type {
-  CreateWorkerBody,
-  CreateWorkspaceBody,
-  RouteDefinition,
-  UserInputBody,
-} from './route-types.js'
+import type { CreateWorkspaceBody, RouteDefinition, UserInputBody } from './route-types.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { authenticateCliAgent, requireCommandForRole } from './team-authz.js'
 import { enrichTeamList } from './team-list-enrichment.js'
 import { serializeTeamListItem } from './team-list-serializer.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import { validateWorkspacePath } from './workspace-path-validation.js'
-import { getOrchestratorId } from './workspace-store-support.js'
+import { getOrchestratorId, getWorkflowAgentId } from './workspace-store-support.js'
+import { resolveWorkspaceUiLanguage, writeWorkspaceUiLanguage } from './workspace-ui-language.js'
 
-const getSerializedWorker = (workspaceId: string, workerId: string, store: RuntimeStore) => {
-  const worker = store.listWorkers(workspaceId).find((item) => item.id === workerId)
-  if (!worker) {
-    throw new Error(`Worker not found: ${workerId}`)
+/* #35: fold each worker's open dispatches (id, age, status, task preview)
+   into the team list payload. Display-only ages — no timeout or heartbeat is
+   derived from them; `queued` rows age from createdAt (submittedAt is null
+   until delivery). */
+const serializeTeamListWithOpenDispatches = (
+  store: Parameters<typeof enrichTeamList>[1] &
+    Pick<RuntimeStore, 'listOpenDispatches' | 'listWorkers'>,
+  workspaceId: string,
+  options: { includeAvatar?: boolean } = {}
+) => {
+  const now = Date.now()
+  const workflowAgentId = getWorkflowAgentId(workspaceId)
+  const openByWorker = new Map<string, TeamListOpenDispatchPayload[]>()
+  for (const dispatch of store.listOpenDispatches(workspaceId)) {
+    if (dispatch.status !== 'queued' && dispatch.status !== 'submitted') continue
+    // Workflow-owned dispatches are the runner's business: handing their ids
+    // to the orchestrator invites a `team cancel` that wedges the run.
+    if (dispatch.workflowRunId !== null || dispatch.fromAgentId === workflowAgentId) continue
+    const list = openByWorker.get(dispatch.toAgentId) ?? []
+    list.push({
+      id: dispatch.id,
+      status: dispatch.status,
+      age_minutes: Math.max(
+        0,
+        Math.floor((now - (dispatch.submittedAt ?? dispatch.createdAt)) / 60_000)
+      ),
+      task_preview: dispatch.text.slice(0, 60),
+    })
+    openByWorker.set(dispatch.toAgentId, list)
   }
-  const [enriched] = enrichTeamList(workspaceId, store, [worker])
-  if (!enriched) throw new Error(`Worker enrichment failed: ${workerId}`)
-  return serializeTeamListItem(enriched)
+  return enrichTeamList(workspaceId, store, store.listWorkers(workspaceId)).map((worker) =>
+    serializeTeamListItem(worker, openByWorker.get(worker.id), options)
+  )
 }
 
 const getRuntimePort = (request: IncomingMessage) => String(request.socket.localPort ?? '')
 
 export const workspaceRoutes: RouteDefinition[] = [
   route('GET', '/api/workspaces', ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     sendJson(response, 200, store.listWorkspaces())
   }),
   route('POST', '/api/workspaces', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const body = await readJsonBody<CreateWorkspaceBody>(request)
     const startupCommand = typeof body.startup_command === 'string' ? body.startup_command : null
     const workspacePath = validateWorkspacePath(body.path)
-    const workspace = store.createWorkspace(workspacePath, body.name)
-    seedOrchestratorLaunchConfig(
-      store,
-      store.settings,
-      workspace.id,
-      body.command_preset_id ?? null,
-      startupCommand
+    if (
+      body.controller_mode !== undefined &&
+      body.controller_mode !== 'internal' &&
+      body.controller_mode !== 'codex_app'
     )
+      throw new BadRequestError('Invalid controller_mode')
+    const workspace = store.createWorkspace(workspacePath, body.name, body.controller_mode)
+    const language = resolveWorkspaceUiLanguage(store.settings, workspace.id, body.ui_language)
+    writeWorkspaceUiLanguage(store.settings, workspace.id, language)
+    if (workspace.controller_mode !== 'codex_app')
+      seedOrchestratorLaunchConfig(
+        store,
+        store.settings,
+        workspace.id,
+        body.command_preset_id ?? null,
+        startupCommand
+      )
 
-    const autostart = body.autostart_orchestrator !== false
+    const autostart =
+      workspace.controller_mode !== 'codex_app' && body.autostart_orchestrator !== false
     if (!autostart) {
       sendJson(response, 201, {
         ...workspace,
@@ -83,7 +113,7 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     await store.deleteWorkspace(workspaceId)
     response.statusCode = 204
     response.end()
@@ -99,12 +129,12 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
     sendJson(
       response,
       200,
-      enrichTeamList(workspaceId, store, store.listWorkers(workspaceId)).map(serializeTeamListItem)
+      serializeTeamListWithOpenDispatches(store, workspaceId, { includeAvatar: true })
     )
   }),
   route('GET', '/api/workspaces/:workspaceId/team', ({ params, request, response, store }) => {
@@ -129,118 +159,13 @@ export const workspaceRoutes: RouteDefinition[] = [
     })
     requireCommandForRole(agent, 'list')
 
-    sendJson(
-      response,
-      200,
-      enrichTeamList(workspaceId, store, store.listWorkers(workspaceId)).map(serializeTeamListItem)
-    )
+    // Polling `team list` is a natural post-restart wakeup: flush any durable
+    // notices stranded for the caller now that its PTY is reachable again.
+    store.drainReportOutbox(workspaceId, agent.id)
+    store.drainDispatchMessageOutbox(workspaceId, agent.id)
+
+    sendJson(response, 200, serializeTeamListWithOpenDispatches(store, workspaceId))
   }),
-  route(
-    'POST',
-    '/api/workspaces/:workspaceId/workers',
-    async ({ params, request, response, store }) => {
-      const workspaceId = getRequiredParam(
-        response,
-        params,
-        'workspaceId',
-        'Workspace id is required'
-      )
-      if (!workspaceId) {
-        return
-      }
-
-      requireUiTokenFromRequest(request, store.validateUiToken)
-
-      const body = await readJsonBody<CreateWorkerBody>(request)
-      const presetId = body.command_preset_id ?? null
-      const startupCommand = typeof body.startup_command === 'string' ? body.startup_command : null
-      const launchConfig = startupCommand?.trim()
-        ? resolveStartupCommandLaunchConfig(store.settings, startupCommand, presetId)
-        : presetId
-          ? resolveCommandPresetLaunchConfig(store.settings, presetId)
-          : undefined
-      if (presetId && !startupCommand?.trim() && !launchConfig) {
-        throw new Error(`Command preset not found: ${presetId}`)
-      }
-      const worker = store.addWorker(workspaceId, body)
-      if (launchConfig) {
-        try {
-          store.configureAgentLaunch(workspaceId, worker.id, launchConfig)
-        } catch (error) {
-          store.deleteWorker(workspaceId, worker.id)
-          throw error
-        }
-      }
-
-      const agentStart =
-        body.autostart === true
-          ? await autostartAgent(store, workspaceId, worker.id, getRuntimePort(request), {
-              missingConfigError: 'No worker launch config available',
-            })
-          : { ok: false, error: null, run_id: null }
-
-      sendJson(response, 201, {
-        ...getSerializedWorker(workspaceId, worker.id, store),
-        agent_start: agentStart,
-      })
-    }
-  ),
-  route(
-    'DELETE',
-    '/api/workspaces/:workspaceId/workers/:workerId',
-    ({ params, request, response, store }) => {
-      const workspaceId = getRequiredParam(
-        response,
-        params,
-        'workspaceId',
-        'Workspace id and worker id are required'
-      )
-      const workerId = getRequiredParam(
-        response,
-        params,
-        'workerId',
-        'Workspace id and worker id are required'
-      )
-      if (!workspaceId || !workerId) {
-        return
-      }
-
-      requireUiTokenFromRequest(request, store.validateUiToken)
-      store.deleteWorker(workspaceId, workerId)
-      response.statusCode = 204
-      response.end()
-    }
-  ),
-  route(
-    'PATCH',
-    '/api/workspaces/:workspaceId/workers/:workerId',
-    async ({ params, request, response, store }) => {
-      const workspaceId = getRequiredParam(
-        response,
-        params,
-        'workspaceId',
-        'Workspace id and worker id are required'
-      )
-      const workerId = getRequiredParam(
-        response,
-        params,
-        'workerId',
-        'Workspace id and worker id are required'
-      )
-      if (!workspaceId || !workerId) {
-        return
-      }
-
-      requireUiTokenFromRequest(request, store.validateUiToken)
-      const body = await readJsonBody<{ name?: string }>(request)
-      if (typeof body.name !== 'string') {
-        sendJson(response, 400, { error: 'name is required' })
-        return
-      }
-      store.renameWorker(workspaceId, workerId, body.name)
-      sendJson(response, 200, getSerializedWorker(workspaceId, workerId, store))
-    }
-  ),
   route(
     'POST',
     '/api/workspaces/:workspaceId/user-input',
@@ -255,10 +180,19 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       const body = await readJsonBody<UserInputBody>(request)
-      store.recordUserInput(workspaceId, `${workspaceId}:orchestrator`, body.text)
+      if (typeof body.text !== 'string' || body.text.trim().length === 0) {
+        sendJson(response, 400, { error: 'text is required' })
+        return
+      }
+      const orchestratorId = getOrchestratorId(workspaceId)
+      if (!store.getActiveRunByAgentId(workspaceId, orchestratorId)) {
+        throw new PtyInactiveError(`No active run for agent: ${orchestratorId}`)
+      }
+
+      await store.deliverUserInput(workspaceId, orchestratorId, body.text)
       sendJson(response, 202, { ok: true })
     }
   ),
@@ -282,7 +216,7 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       if (
         agentId === getOrchestratorId(workspaceId) &&

@@ -1,6 +1,7 @@
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { ConfigureAgentLaunchBody, RouteDefinition } from './route-types.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
+import { serializeLiveAgentRun } from './workflow-http-serializers.js'
 import { getWorkspaceShellAgentId } from './workspace-shell-runtime.js'
 
 export const runtimeRoutes: RouteDefinition[] = [
@@ -15,7 +16,7 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
     sendJson(response, 200, store.listTerminalRuns(workspaceId))
   }),
@@ -33,7 +34,7 @@ export const runtimeRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       const run = await store.startWorkspaceShell(workspaceId)
       const summary = store
@@ -68,7 +69,7 @@ export const runtimeRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       if (!store.closeWorkspaceShell(workspaceId, runId)) {
         sendJson(response, 404, { error: 'Shell run not found' })
         return
@@ -97,7 +98,7 @@ export const runtimeRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       const body = await readJsonBody<ConfigureAgentLaunchBody>(request)
       store.configureAgentLaunch(workspaceId, agentId, {
@@ -115,7 +116,7 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
     store.stopAgentRun(runId)
     sendJson(response, 202, { ok: true })
@@ -126,8 +127,13 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
-    sendJson(response, 200, store.getLiveRun(runId))
+    const run = store.findLiveRun(runId)
+    if (!run) {
+      sendJson(response, 404, { error: 'Run not found' })
+      return
+    }
+    sendJson(response, 200, serializeLiveAgentRun(run))
   }),
 ]

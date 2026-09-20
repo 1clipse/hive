@@ -75,8 +75,8 @@ describe('claude session concurrent capture', () => {
     process.env.HIVE_CLAUDE_PROJECTS_DIR = root
     const bobSessionId = '11111111-1111-4111-8111-111111111111'
     const aliceSessionId = '22222222-2222-4222-8222-222222222222'
-    const aliceNeedle = '你是 Demo 的 Alice（coder）。'
-    const bobNeedle = '你是 Demo 的 Bob（coder）。'
+    const aliceNeedle = 'You are Alice (coder) in workspace Demo.'
+    const bobNeedle = 'You are Bob (coder) in workspace Demo.'
     const alice: string[] = []
     const bob: string[] = []
 

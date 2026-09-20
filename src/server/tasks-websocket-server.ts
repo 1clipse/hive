@@ -7,19 +7,18 @@ import { getLocalRequestRejection } from './local-request-guard.js'
 import type { RuntimeStore } from './runtime-store.js'
 import type { TasksFileService } from './tasks-file.js'
 import { readCookie } from './ui-auth-helpers.js'
+import {
+  attachRawSocketErrorHandler,
+  attachWebSocketErrorHandler,
+  attachWebSocketServerErrorHandler,
+  rejectWebSocketUpgrade,
+  sendWebSocketMessage,
+} from './websocket-upgrade-safety.js'
 
 const matchTasksPath = (pathname: string) => {
   const match = /^\/ws\/tasks\/(?<workspaceId>[^/]+)$/.exec(pathname)
   const workspaceId = match?.groups?.workspaceId
   return workspaceId ? decodeURIComponent(workspaceId) : null
-}
-
-const rejectUpgrade = (
-  socket: Parameters<Server['on']>[1] extends (...args: infer T) => void ? T[1] : never,
-  status: string
-) => {
-  socket.write(`HTTP/1.1 ${status}\r\n\r\n`)
-  socket.destroy()
 }
 
 export interface TasksWebSocketServer {
@@ -33,9 +32,13 @@ export const createTasksWebSocketServer = (
   tasksFileService: Pick<TasksFileService, 'readTasks'>
 ): TasksWebSocketServer => {
   const wss = new WebSocketServer({ noServer: true })
+  attachWebSocketServerErrorHandler(wss, 'tasks')
   const socketsByWorkspaceId = new Map<string, Set<WsSocket>>()
 
   const validateUpgradeSession = (request: IncomingMessage) => {
+    // Tunnel-originated upgrades carry the per-boot secret (invariant 2); a
+    // request with no secret header falls through to the unchanged cookie path.
+    if (store.authorizeRemoteTunnelRequest(request)) return true
     const cookieHeader = Array.isArray(request.headers.cookie)
       ? request.headers.cookie.join('; ')
       : request.headers.cookie
@@ -47,22 +50,25 @@ export const createTasksWebSocketServer = (
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     const workspaceId = matchTasksPath(url.pathname)
     if (!workspaceId) return
+    const detachRawSocketErrorHandler = attachRawSocketErrorHandler(socket, 'tasks upgrade')
     if (getLocalRequestRejection(request)) {
-      rejectUpgrade(socket, '403 Forbidden')
+      rejectWebSocketUpgrade(socket, '403 Forbidden')
       return
     }
     if (!validateUpgradeSession(request)) {
-      rejectUpgrade(socket, '401 Unauthorized')
+      rejectWebSocketUpgrade(socket, '401 Unauthorized')
       return
     }
     let workspacePath = ''
     try {
       workspacePath = store.getWorkspaceSnapshot(workspaceId).summary.path
     } catch {
-      rejectUpgrade(socket, '404 Not Found')
+      rejectWebSocketUpgrade(socket, '404 Not Found')
       return
     }
     wss.handleUpgrade(request, socket, head, (ws) => {
+      detachRawSocketErrorHandler()
+      attachWebSocketErrorHandler(ws, `tasks ${workspaceId}`)
       const sockets = socketsByWorkspaceId.get(workspaceId) ?? new Set<WsSocket>()
       sockets.add(ws)
       socketsByWorkspaceId.set(workspaceId, sockets)
@@ -75,15 +81,21 @@ export const createTasksWebSocketServer = (
       setImmediate(() => {
         if (ws.readyState !== ws.OPEN) return
         try {
-          ws.send(
+          sendWebSocketMessage(
+            ws,
             JSON.stringify({
               type: 'tasks-snapshot',
               content: tasksFileService.readTasks(workspacePath),
-            })
+            }),
+            `tasks ${workspaceId} snapshot`
           )
         } catch {
           if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({ type: 'tasks-snapshot', content: '' }))
+            sendWebSocketMessage(
+              ws,
+              JSON.stringify({ type: 'tasks-error', error: 'Failed to read tasks file' }),
+              `tasks ${workspaceId} snapshot error`
+            )
           }
         }
       })
@@ -93,7 +105,7 @@ export const createTasksWebSocketServer = (
   return {
     close: () => {
       for (const sockets of socketsByWorkspaceId.values()) {
-        for (const socket of sockets) socket.close()
+        for (const socket of sockets) socket.terminate()
       }
       socketsByWorkspaceId.clear()
       wss.close()
@@ -103,9 +115,7 @@ export const createTasksWebSocketServer = (
       if (!sockets) return
       const payload = JSON.stringify({ type: 'tasks-updated', content })
       for (const socket of sockets) {
-        if (socket.readyState === socket.OPEN) {
-          socket.send(payload)
-        }
+        sendWebSocketMessage(socket, payload, `tasks ${workspaceId} publish`)
       }
     },
   }

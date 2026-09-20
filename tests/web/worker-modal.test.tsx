@@ -51,6 +51,7 @@ describe('WorkerModal — pure PTY view (control actions live on WorkerCard)', (
     const slot = document.getElementById(`worker-pty-${runId}`)
     expect(slot).not.toBeNull()
     expect(slot?.getAttribute('data-pty-slot')).toBe('worker')
+    expect(slot?.getAttribute('data-terminal-auto-focus')).toBe('true')
   })
 
   test('renders the empty-state Start affordance when no PTY is running', () => {

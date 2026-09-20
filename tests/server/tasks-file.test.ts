@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -31,6 +31,8 @@ describe('tasks file service', () => {
 
     expect(service.readTasks(workspacePath)).toBe('- [ ] implement login\n')
     expect(readFileSync(tasksPath, 'utf8')).toBe('- [ ] implement login\n')
+    const hiveDirEntries = readdirSync(join(workspacePath, '.hive'))
+    expect(hiveDirEntries.filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
   test('copies legacy root tasks.md into .hive/tasks.md without rewriting the root file', () => {

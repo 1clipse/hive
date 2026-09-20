@@ -1,4 +1,4 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
-import { createServer } from './mcp.mjs'
+import { createServer } from './mcp.js'
 
 void serveStdio(createServer)

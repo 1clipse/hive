@@ -1,3 +1,12 @@
+interface ApprovalInput {
+  securityDecision: string
+  requiresUserConfirmation: boolean
+  riskLevel: number
+  requested?: boolean
+  tool?: string
+  allowedTools?: string[]
+}
+
 export function automaticApproval({
   securityDecision,
   requiresUserConfirmation,
@@ -5,12 +14,15 @@ export function automaticApproval({
   requested = false,
   tool,
   allowedTools = [],
-}) {
+}: ApprovalInput) {
   const approved =
     requested &&
+    typeof tool === 'string' &&
     allowedTools.includes(tool) &&
     securityDecision === 'clear' &&
     requiresUserConfirmation === false &&
+    Number.isFinite(riskLevel) &&
+    riskLevel >= 0 &&
     riskLevel <= 1
   return {
     auto_approved: approved,

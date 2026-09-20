@@ -189,7 +189,7 @@ Hive **不**提供 sandbox 隔离、多用户认证，也不自带任何 agent �
 
 ### 可选集成
 
-- [TypeSafe Jev](integrations/hive-jev/README.md)：为现有成员提供可选的任务路由、上下文副本压缩、待执行动作审核，以及使用 DeepSeek 文本助手的受限浏览器执行。它作为独立 MCP 进程运行，避免模型供应商凭据被 Hive 成员进程继承。
+- [TypeSafe Jev](https://github.com/tt-a1i/hive/tree/main/integrations/hive-jev)：为现有成员提供可选的任务路由、上下文副本压缩、待执行动作审核，以及使用 DeepSeek 文本助手的受限浏览器执行。它作为独立 MCP 进程运行，避免模型供应商凭据被 Hive 成员进程继承。
 
 ## 远程访问（可选，默认关闭）
 

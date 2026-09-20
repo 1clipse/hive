@@ -22,7 +22,8 @@ Hive member processes. It is designed and tested alongside the public npm releas
 
 ```powershell
 cd integrations/hive-jev
-npm install
+npm ci
+npm run build
 uv venv .venv --python 3.12
 uv pip install --python .venv "git+https://github.com/browser-use/jev-ultrafast.git@1231850a0bf1a0c0341fe408ef1668dbbfdfac46"
 ```
@@ -38,9 +39,16 @@ TEXT_MODEL=deepseek-flash
 HIVE_JEV_PYTHON=<absolute path to .venv/Scripts/python.exe>
 ```
 
-Start the stdio MCP server with `node src/server.mjs`. Register it next to Hive's
+Start the stdio MCP server with `npm start`. Register it next to Hive's
 own `hive mcp` adapter in the external controller. The controller can consult Jev,
 then use Hive's normal action to dispatch work to an existing member.
+
+The Node/MCP surface is TypeScript. The small Python runner is an explicit adapter
+to the pinned `jev-ultrafast` Python runtime; it owns no credentials or Hive state.
+For `hive_jev_route_task`, the controller must pass a current roster obtained from
+Hive's authoritative `team list`/API result and set
+`roster_source: "hive_authoritative_snapshot"`. The integration never invents or
+creates a member and never dispatches the selected member itself.
 
 ## Browser execution contract
 
@@ -70,6 +78,7 @@ still does not execute the reviewed host action.
 
 ```powershell
 npm run check
+npm run build
 npm test
 <HIVE_JEV_PYTHON> -m unittest test/browser_policy_test.py
 ```

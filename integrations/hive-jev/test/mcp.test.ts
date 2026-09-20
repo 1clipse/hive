@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 test('MCP exposes the bounded Jev integration surface', async () => {
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [path.join(root, 'src', 'server.mjs')],
+    args: [path.join(root, 'src', 'server.js')],
     cwd: root,
   })
   const client = new Client({ name: 'hive-jev-test', version: '0.1.0' })
@@ -26,7 +26,11 @@ test('MCP exposes the bounded Jev integration surface', async () => {
     ])
     const status = await client.callTool({ name: 'hive_jev_status', arguments: {} })
     assert.equal(status.isError, undefined)
-    assert.equal(JSON.parse(status.content[0].text).hive_compatibility.includes('2.2.1'), true)
+    const content = status.content[0]
+    assert.equal(content?.type, 'text')
+    if (!content || content.type !== 'text') throw new Error('Expected text status content.')
+    const parsed = JSON.parse(content.text) as { hive_compatibility: string }
+    assert.equal(parsed.hive_compatibility.includes('2.2.1'), true)
   } finally {
     await client.close()
   }

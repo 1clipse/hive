@@ -264,7 +264,7 @@ It coordinates the CLIs you already run locally.
 
 ### Optional integrations
 
-- [TypeSafe Jev](integrations/hive-jev/README.md): optional existing-member
+- [TypeSafe Jev](https://github.com/tt-a1i/hive/tree/main/integrations/hive-jev): optional existing-member
   routing, transcript-copy compaction, pending-action review, and bounded browser
   execution with a DeepSeek text helper. It runs as a separate MCP process so
   provider credentials are not inherited by Hive members.

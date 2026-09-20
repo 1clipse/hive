@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import * as z from 'zod/v4'
-import { compactMessages, reviewAction, routeTask, runBrowserTask, status } from './core.mjs'
+import { INTEGRATION_NAME, INTEGRATION_VERSION } from './constants.js'
+import { compactMessages, reviewAction, routeTask, runBrowserTask, status } from './core.js'
+import { IntegrationError } from './errors.js'
 
 const readOnly = {
   readOnlyHint: true,
@@ -14,23 +16,31 @@ const executing = {
   idempotentHint: false,
   openWorldHint: true,
 }
-const ok = (value) => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] })
-const guarded = (handler) => async (args) => {
-  try {
-    return ok(await handler(args))
-  } catch (error) {
-    return {
-      isError: true,
-      content: [
-        { type: 'text', text: error instanceof Error ? error.message : 'Unknown hive-jev error.' },
-      ],
+const ok = (value: unknown) => ({
+  content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+})
+const guarded =
+  <T>(handler: (args: T) => unknown | Promise<unknown>) =>
+  async (args: T) => {
+    try {
+      return ok(await handler(args))
+    } catch (error) {
+      if (!(error instanceof IntegrationError)) throw error
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ code: error.code, message: error.message }),
+          },
+        ],
+      }
     }
   }
-}
 
 export function createServer() {
   const server = new McpServer(
-    { name: 'hive-jev', version: '0.1.0' },
+    { name: INTEGRATION_NAME, version: INTEGRATION_VERSION },
     {
       instructions:
         'Optional decision layer for Hive. Routing never dispatches or changes members. Compaction only changes a supplied copy. Automatic approval is limited to clear low-risk actions. Browser execution requires explicit opt-in and an independent expected outcome.',
@@ -53,6 +63,7 @@ export function createServer() {
       inputSchema: z.object({
         task: z.string().min(1).max(40_000),
         context: z.string().max(20_000).optional(),
+        roster_source: z.literal('hive_authoritative_snapshot'),
         candidates: z
           .array(
             z.object({ id: z.string().min(1).max(100), description: z.string().min(1).max(2_000) })

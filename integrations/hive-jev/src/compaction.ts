@@ -1,21 +1,59 @@
-import { callJev } from './typesafe.mjs'
+import { IntegrationError } from './errors.js'
+import { callJev, type JevAnswer } from './typesafe.js'
 
-function answerScore(answer) {
+interface ToolUse {
+  tool_use_id: string
+  tool: string
+  input: unknown
+}
+
+interface ToolResult {
+  tool_use_id: string
+  text: string
+  is_error?: boolean | undefined
+}
+
+export interface TranscriptMessage {
+  role: 'user' | 'assistant'
+  text: string
+  tool_uses?: ToolUse[] | undefined
+  tool_results?: ToolResult[] | undefined
+}
+
+interface CompactionOptions {
+  preserve_recent_messages?: number | undefined
+  keep_threshold?: number | undefined
+  goal?: string | undefined
+}
+
+function answerScore(answer: JevAnswer | undefined): number {
   if (!answer || answer.type !== 'noul' || !Number.isFinite(answer.noul)) {
-    throw new Error(
+    throw new IntegrationError(
+      'typesafe_invalid_compaction_answer',
       'TypeSafe returned an invalid compaction answer; the source history was preserved.'
+    )
+  }
+  if (answer.noul < 0 || answer.noul > 1) {
+    throw new IntegrationError(
+      'typesafe_invalid_compaction_answer',
+      'TypeSafe returned an out-of-range compaction answer; the source history was preserved.'
     )
   }
   return answer.noul
 }
 
-export async function compactMessages(messages, options = {}) {
+export async function compactMessages(
+  messages: TranscriptMessage[],
+  options: CompactionOptions = {}
+) {
   const recent = Math.max(0, Math.floor(options.preserve_recent_messages ?? 6))
   const threshold = options.keep_threshold ?? 0.5
   const protectedFrom = Math.max(0, messages.length - recent)
-  const candidates = []
+  const candidates: Array<{ messageIndex: number; toolUse: ToolUse }> = []
   for (let messageIndex = 0; messageIndex < protectedFrom; messageIndex += 1) {
-    for (const toolUse of messages[messageIndex].tool_uses ?? []) {
+    const message = messages[messageIndex]
+    if (!message) continue
+    for (const toolUse of message.tool_uses ?? []) {
       candidates.push({ messageIndex, toolUse })
     }
   }
@@ -23,7 +61,7 @@ export async function compactMessages(messages, options = {}) {
     return { source_history_mutated: false, messages: structuredClone(messages), decisions: [] }
   }
 
-  const questions = {}
+  const questions: Record<string, unknown> = {}
   for (const { toolUse } of candidates) {
     questions[`call_${toolUse.tool_use_id}`] = {
       type: 'noul',
@@ -43,6 +81,11 @@ export async function compactMessages(messages, options = {}) {
         tool_use_id,
         tool,
         input,
+      })),
+      tool_results: (message.tool_results ?? []).map(({ tool_use_id, text, is_error }) => ({
+        tool_use_id,
+        text,
+        ...(is_error === undefined ? {} : { is_error }),
       })),
     })),
   }
@@ -79,7 +122,9 @@ export async function compactMessages(messages, options = {}) {
       }
       return [toolResult]
     })
-    return copy.text || copy.tool_uses.length || copy.tool_results.length ? [copy] : []
+    return copy.text || (copy.tool_uses?.length ?? 0) || (copy.tool_results?.length ?? 0)
+      ? [copy]
+      : []
   })
   return { source_history_mutated: false, messages: compacted, decisions }
 }

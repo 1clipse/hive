@@ -3,18 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "license": "BUSL-1.1",
+  "files": [
+    "dist/src/",
+    "scripts/*.py",
+    "README.md",
+    "THIRD_PARTY.md"
+  ],
   "description": "Optional Jev decision, compaction, review, and browser execution tools for Hive.",
   "scripts": {
-    "check": "node --check src/server.mjs && node --check src/mcp.mjs && node --check src/core.mjs && node --check src/browser.mjs && node --check src/compaction.mjs",
-    "start": "node src/server.mjs",
-    "test": "node --test test/*.test.mjs"
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/src/server.js",
+    "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "2.0.0"
+    "@modelcontextprotocol/client": "2.0.0",
+    "@types/node": "24.6.0",
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=22"

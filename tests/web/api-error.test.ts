@@ -1,12 +1,69 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { createWorkspace, startAgentRun } from '../../web/src/api.js'
+import { createWorkspace, isRuntimeRunActive, startAgentRun } from '../../web/src/api.js'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
 describe('api error messages', () => {
+  test('isRuntimeRunActive maps live-run statuses and preserves server errors', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'running' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'starting' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'exited' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'error' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Run not found' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 404,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'sync exploded' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 500,
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(isRuntimeRunActive('run-running')).resolves.toBe(true)
+    await expect(isRuntimeRunActive('run-starting')).resolves.toBe(true)
+    await expect(isRuntimeRunActive('run-exited')).resolves.toBe(false)
+    await expect(isRuntimeRunActive('run-error')).resolves.toBe(false)
+    await expect(isRuntimeRunActive('run-missing')).resolves.toBe(false)
+    await expect(isRuntimeRunActive('run/needs encoding')).rejects.toThrow('sync exploded')
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/runtime/runs/run-running',
+      '/api/runtime/runs/run-starting',
+      '/api/runtime/runs/run-exited',
+      '/api/runtime/runs/run-error',
+      '/api/runtime/runs/run-missing',
+      '/api/runtime/runs/run%2Fneeds%20encoding',
+    ])
+  })
+
   test('createWorkspace preserves server JSON error detail', async () => {
     vi.stubGlobal(
       'fetch',

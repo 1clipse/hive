@@ -2,6 +2,326 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 2.2.1 - 2026-09-08
+
+Task-focused collaboration guidance and reliable role instructions.
+
+- Share task selection and acceptance principles across startup, recovery and
+  external controllers, considering coordination effort and user-selected resources.
+- Read current workspace guidance on demand through `team guide` and the
+  external controller guide; distinguish offline references from live capabilities.
+- Clarify questions, progress, acknowledgements and final reports, with corrected
+  reply routing for ordinary and recovered task messages.
+- Preserve custom workflow role descriptions in the actual member startup prompt.
+- Include installation fixes for fresh npm installs with lifecycle scripts disabled.
+
+## 2.2.0 - 2026-09-06
+
+Task conversations and consistent coordination across Hive and Codex App.
+
+- Keep questions, answers and additional requirements attached to the original task;
+  link review and follow-up work without losing report history.
+- Use existing members and their configured CLI/model choices, with shared
+  coordination rules for the built-in Orchestrator and Codex App controller.
+- Restore open responsibilities and new inputs from the task ledger; require
+  reports to explicitly account for the messages received.
+- Connect a Codex App conversation as a workspace controller, with confirmation,
+  persistent result receipts and identifiable delayed notifications.
+- Show task discussions and related work in Action Center; distinguish submitted
+  reports from accepted outcomes.
+- Improve npm 12 native dependency installation and package verification.
+
+Existing databases migrate automatically. Back up your Hive data before upgrading;
+rollback requires the pre-upgrade database backup and matching older binary.
+
+## 2.1.19 - 2026-07-22
+
+Terminal restore reliability, clearer report delivery, and a larger agent marketplace.
+
+- Restores SGR mouse encoding with terminal snapshots, preventing mouse movement
+  and wheel input from appearing as raw characters after reconnecting or opening
+  a restored terminal, including on Windows remote sessions.
+- Keeps `team report` delivery status accurate until the Orchestrator PTY write
+  settles, with clearer sanitized diagnostics when queued delivery cannot drain.
+- Expands and refreshes the bundled English and Chinese agent marketplace across
+  engineering, security, GIS, operations, marketing, and other specialist roles.
+
+## 2.1.18 - 2026-07-12
+
+Workspace polish, broader member names, and more reliable Dream runs.
+
+- Refreshes the workspace sidebar, team member cards, task drawer, and Memory
+  drawer for clearer hierarchy and better compact/mobile layouts.
+- Draws generated member names from one shared 1,111-name bank across roles,
+  languages, Add Member, and scenario presets.
+- Runs scheduled Dream maintenance with the workspace Orchestrator's configured
+  Claude or Codex CLI and preset environment instead of assuming Claude.
+- Improves scheduled Dream command resolution and timeout cleanup on Windows,
+  including npm command shims and child process trees.
+
+## 2.1.17 - 2026-07-08
+
+Team role cleanup and quieter dispatches.
+
+- Removes the retired Sentinel patrol role from team-member creation, role
+  templates, prompts, random names, icons, and settings surfaces.
+- Cleans stale Sentinel templates and workers from existing local databases on
+  upgrade, including related dispatch/report/session records.
+- Keeps Reviewer, Coder, Tester, and Custom as the supported worker roles.
+- Stops asking workers to send an immediate "accepted dispatch" status for
+  every task; members now start work directly and report when done, blocked,
+  failed, or partially complete.
+
+## 2.1.16 - 2026-07-08
+
+Codex resume context reliability.
+
+- Preserves a Codex worker's saved conversation pointer when a resumed start
+  exits because of a temporary CLI, configuration, or resource failure and the
+  underlying Codex session still exists.
+- Treats matching but temporarily unreadable Codex session files as
+  unverifiable instead of clearing the saved session too aggressively.
+- Clears truly stale or missing saved Codex session pointers after a failed
+  resume, so Hive can start fresh instead of repeatedly retrying a broken
+  session id.
+- Uses one shared session-existence path for supported native session stores,
+  keeping resume cleanup behavior consistent across CLI presets.
+
+## 2.1.15 - 2026-07-02
+
+Worker avatars, terminal rendering reliability, and clearer team report delivery.
+
+- Adds custom worker avatars, including upload, crop, validation, persistence,
+  and display across the team UI.
+- Keeps worker avatars out of CLI team-list responses while still showing them
+  in the browser workspace.
+- Improves terminal rendering under heavy output and reconnect/restore flows,
+  reducing stale or duplicated terminal frames.
+- Tightens Dream memory consolidation instructions so procedure references are
+  only used for real saved workflows, skills, procedures, templates, or docs.
+- Makes `team report` delivery wording more accurate when Hive accepts a report
+  and durable Orchestrator delivery is still in progress.
+- Adjusts Orchestrator guidance so accepted dispatches are usually left alone
+  until a member reports, reducing premature status checks or cancels.
+
+## 2.1.14 - 2026-06-25
+
+Terminal focus and Dream memory reliability.
+
+- Focuses the active Orchestrator terminal automatically when you return to
+  the Hive browser tab, so you can resume typing without clicking the terminal
+  first.
+- Focuses a member terminal automatically when you open the member panel, while
+  preserving focus in normal text fields and leaving workspace shell terminals
+  alone.
+- Tightens Dream memory consolidation instructions so ordinary workflow advice
+  is saved as normal memory instead of being misclassified as a procedure
+  reference without the required structured reference.
+
+## 2.1.12 - 2026-06-25
+
+Default port and Pi agent support.
+
+- Changes Hive's default local runtime port from `3000` to `9483`, reducing
+  collisions with common local development services while keeping `--port 0`
+  available for OS-assigned ports.
+- Updates the local Supervisor MCP adapter and Vite dev proxy to follow the
+  same default port.
+- Adds Pi as a built-in agent preset with `pi --approve`, including workflow
+  CLI policy support, prompt-readiness handling, and migration support for
+  existing Hive databases.
+
+## 2.1.11 - 2026-06-25
+
+Supervisor MCP bridge and terminal input polish.
+
+- Adds a local Supervisor MCP adapter so external agents such as Codex App,
+  Claude, or Hermes can hand a goal to the Hive Orchestrator and wait on
+  durable structured goal events.
+- Adds `team goal report` for Orchestrators to report external goal progress,
+  completion, blocked states, or failures without giving external supervisors
+  direct member or PTY control.
+- Keeps the Supervisor MCP surface intentionally narrow: list/inspect
+  workspaces, start/wait/continue/cancel goals, with no direct member spawn,
+  member send, raw scrollback, or PTY write tools.
+- Improves OpenCode prompt readiness detection for completed turns and
+  interrupt-status screens, making post-start input delivery more reliable.
+- Preserves Codex prompt edit repaint frames after Backspace/Delete-style input,
+  so terminal editing stays visually in sync.
+
+## 2.1.10 - 2026-06-23
+
+Scenario teams and terminal delivery polish.
+
+- Starts members created from one-click scenarios immediately, so the team is
+  ready for the Orchestrator to assign work instead of sitting stopped.
+- Uses the shared member-name pool for scenario-created members, matching the
+  Add Member dialog and avoiding generated stem-only names.
+- Improves OpenCode dispatch delivery after startup by recognizing its completed
+  turn footer as a ready signal, while waiting briefly for the terminal output
+  to settle before injecting the next dispatch.
+- Adds an explicit accepted-dispatch status instruction to member tasks, making
+  it easier to see that a member received a dispatch before it starts working.
+- Keeps optimistic terminal panels tied to real run lifecycle events and
+  preserves Codex cursor-position repaint frames, improving terminal display
+  during editing and fast start/stop flows.
+
+## 2.1.9 - 2026-06-23
+
+Lean Hive guidance and desktop terminal polish.
+
+- Replaces the large Orchestrator startup instruction block with a shorter
+  core prompt that points agents to focused `team guide` topics for dispatch,
+  task tracking, memory, workflow, and member rules.
+- Adds `team guide <topic>` so agents can read the relevant Hive runtime
+  protocol slice on demand, backed by the generated workspace protocol when
+  available.
+- Standardizes user-facing collaboration language around Hive **members**
+  instead of "workers", matching the UI and product model.
+- Includes the Codex terminal input repaint fix for Chinese/CJK backspace and
+  the cleaner desktop member-window outside-click close behavior.
+
+## 2.1.8 - 2026-06-23
+
+Codex terminal editing and member-window polish.
+
+- Fixes Codex terminal input repainting for Chinese/CJK text so pressing
+  backspace updates the visible input line immediately instead of leaving stale
+  characters on screen.
+- Removes the visible desktop member-window close button from the terminal
+  corner and adds an outside-click close hint, giving the terminal more clean
+  space while keeping mobile's full-screen close affordance.
+
+## 2.1.7 - 2026-06-23
+
+Team delivery recovery and remote-access hardening.
+
+- Makes worker reports durable when the Orchestrator is offline or restarting,
+  so completed work is queued for redelivery instead of being silently lost.
+- Tightens cancel, worker-dismiss, and queued-dispatch recovery paths so stale
+  work gets a clear dropped/cancelled outcome instead of leaving agents waiting.
+- Makes user input delivery truthful: if the Orchestrator terminal is offline,
+  Hive rejects the input instead of recording a message that was never sent.
+- Standardizes remote-access HTTP responses on snake_case fields and keeps the
+  web UI mapping them back into its internal camelCase model.
+- Blocks remote devices from reading or approving desktop-only pairing
+  approvals through the tunnel, while preserving normal equal-authority device
+  management routes.
+
+## 2.1.6 - 2026-06-21
+
+Team UX polish and release visibility.
+
+- Adds a global package-update prompt so running Hive can surface a newer npm
+  version without relying only on the topbar badge.
+- Makes worker startup handshakes explicit: newly started members now report a
+  ready status back to the Orchestrator after receiving Hive's injected startup
+  instructions, making failed starts easier to distinguish from idle workers.
+- Removes the Orchestrator pane stop button from the UI so users cannot
+  accidentally close the central coordinator from the pane chrome.
+- Reworks the Action Center entry into a dedicated drawer with live workspace
+  health, attention, recent activity, and worker selection instead of the old
+  compact popover.
+
+## 2.1.5 - 2026-06-21
+
+Ambient memory reliability and background consolidation.
+
+- Makes team memory quieter and more automatic by removing the visible
+  candidate-review surface from the Memory drawer while keeping active,
+  archived, and Dream audit history available when you look for it.
+- Adds user-scoped memory for lightweight personal preferences and working
+  style, without mixing those preferences into workspace project facts.
+- Adds structured procedure references so workflows, skills, and checklists can
+  be recalled as short references instead of long copied instructions.
+- Improves dispatch memory retrieval so unrelated worker-role matches do not
+  inject stale or cross-task memory into a new assignment.
+- Moves scheduled Dream consolidation into a background apply path with
+  transaction checks, source-window validation, failure isolation, and revert.
+
+## 2.1.4 - 2026-06-21
+
+Quieter onboarding and team activity signals.
+
+- Simplifies the first workspace experience so Hive no longer pushes an
+  Orchestrator dispatch prompt before the user has a concrete task.
+- Removes the noisy dispatch pulse and queue-count badges from the team UI,
+  keeping attention on active work, reports, and terminal state.
+- Cleans up the empty-workspace sidebar so collapsed mode no longer shows a
+  stray compact add button.
+- Updates release verification so normal patch releases use the package-focused
+  fast gate, while the full test gate remains available for high-risk releases.
+
+## 2.1.3 - 2026-06-18
+
+Issue backlog polish for onboarding, dispatch, demo, and release readiness.
+
+- Holds Hive startup instruction injection while first-run CLI setup prompts are
+  visible, avoiding collisions with trust/login/confirmation onboarding screens.
+- Adds a first-dispatch guide on the Orchestrator pane for non-scenario flows,
+  and makes user-input delivery truthful when the Orchestrator PTY is offline.
+- Adds language-aware built-in role contracts and scenario/spawn defaults so
+  English workspaces no longer receive zh-only worker prompts.
+- Replaces the external demo video with a local self-running Hive replay that
+  shows task progress, worker states, and team dispatch flow.
+- Adds a local CLI compatibility report for native modules and Tier-1 agent
+  CLIs, wired into release verification.
+- Surfaces local-only retention diagnostics in Settings and adds candidate
+  memory review controls to the Memory drawer.
+- Re-verifies the existing `team recall` route, CLI, and remote relay path.
+
+## 2.1.2 - 2026-06-16
+
+Spawned-worker dispatch reliability.
+
+- Fixes `team spawn` followed by `team send`: newly spawned workers now wake for
+  their first task instead of leaving the dispatch parked in the stopped queue.
+- Keeps stopped-worker semantics intact after that first run: if a spawned
+  worker is later stopped manually, new sends stay queued until the worker is
+  started again.
+- Makes Windows Claude Code sessions more tolerant of large Hive startup and
+  dispatch injections, reducing premature submit/input residue during agent
+  startup.
+
+## 2.1.1 - 2026-06-14
+
+Codex terminal input polish and Action Center mobile refinements.
+
+- Makes Codex terminal input smoother and more reliable during pasted or
+  programmatically injected prompts.
+- Polishes the Action Center layout and interaction details, especially on
+  narrower and mobile-sized screens.
+
+## 2.1.0 - 2026-06-13
+
+One-click team assembly, visible memory consolidation, and remote/dispatch reliability.
+
+- Adds **one-click scenario team assembly** — start a ready-made team from a
+  preset instead of adding members one at a time, with guiding empty-state cards
+  when a workspace has no team yet.
+- Reworks team-memory **Dream consolidation** to run through your Orchestrator
+  instead of a hidden background CLI pass: maintenance is injected as a visible
+  task (`team memory dream show` / `team memory apply`), workers may be asked to
+  review proposed changes read-only, and only the Orchestrator commits them.
+  Every run keeps a diff report and a one-step revert.
+- Adds a one-click, copyable **team recap** and a diagnostics support bundle to
+  the Action Center for faster sharing and troubleshooting.
+- Adds a **dispatch pulse** animation so `team send` visibly flows from the
+  Orchestrator to the receiving worker.
+- Guides you to install any missing CLI directly from the add-workspace dialog
+  before you start a team.
+- Makes dispatching more reliable: queued tasks replay when a worker starts,
+  delivery failures notify the issuer instead of being lost, and `team list`
+  now exposes open dispatches.
+- Adds local per-day retention signals (protocol event counters) for workspace
+  activity.
+- Fixes remote/mobile reliability: large uploads over the tunnel are chunked
+  under the relay message cap, and terminal scrolling is restored for CLIs
+  launched through wrapped or legacy commands (for example Codex on Windows).
+- Hardens prompts and the workflow runtime against prompt-injection, and
+  polishes protocol error messages, onboarding, and `team spawn` role/CLI
+  handling.
+
 ## 2.0.2 - 2026-06-10
 
 Windows Codex terminal scrolling fix.
@@ -30,31 +350,37 @@ Team memory, worker-card polish, and release-channel cleanup.
 
 ## 2.0.0 - 2026-06-07
 
-Remote access and mobile control.
+Remote access, mobile control, and the production gateway.
 
 - Adds optional Remote access so you can open your running Hive from a phone
   browser. Remote is off by default; when enabled, the phone connects through
   an end-to-end encrypted tunnel and gets the same authority as the local
   desktop browser.
+- Ships the Cloudflare Workers gateway stack for identity and routing: GitHub
+  and Google sign-in, Durable Object relay, D1-backed daemon/device records,
+  rate limiting, version-pinned mobile bundles, and deployment runbooks for
+  self-hosting or pointing Hive at an existing gateway.
 - Adds the desktop trust-root pairing flow. The desktop creates a short-lived
   pairing code, the phone enters it after selecting the machine, both sides
-  show a 6-digit verification code, and the device is stored only after desktop
+  show a 6-digit SAS code, and the device is stored only after desktop
   confirmation.
 - Adds remote device management: list paired devices, revoke them from
-  Settings or the CLI, drop live sessions from the Settings panel, and review
-  an audit trail of remote requests and denials.
+  Settings or the CLI, drop live sessions immediately from the Settings panel,
+  and review an audit trail of remote requests and denials.
 - Adds `hive remote login`, `status`, `logout`, `devices`, and `revoke` for
-  linking the machine to a gateway account and managing paired devices from the
-  host itself.
+  linking the machine to a gateway account and managing paired devices from
+  the host itself.
 - Adds the mobile Hive shell: sign-in/connect screens, machine list, bottom
   navigation, workspace switching, full-screen team/task panels, and
   remote-aware reconnect and update prompts.
 - Makes phone terminals writable through the terminal itself. Worker terminals
   can be opened full-screen, mobile focus mode hides surrounding chrome while
-  you work, and terminal touch scrolling tracks the finger more closely.
+  you work, and terminal touch scrolling now tracks the finger more closely
+  with smoother normal-buffer glide and faster alternate-screen movement.
 - Preserves local-first behavior: local `127.0.0.1` Hive keeps working without
-  Remote access, and paired phones cannot approve new devices or turn Remote
-  access back on after it has been disabled.
+  a gateway, remote access is path-whitelisted to Hive's own `/api/*` and
+  `/ws/*`, and paired phones cannot approve new devices or turn Remote access
+  back on after it has been disabled.
 
 ## 1.7.0 - 2026-06-05
 
@@ -64,30 +390,36 @@ Hermes joins the roster.
   Codex, OpenCode, and Gemini: available as an Orchestrator or Worker, in
   `team spawn --cli hermes`, and in the workflow CLI allowlist.
 - Hermes runs YOLO via `--yolo` and resumes sessions via
-  `--resume <session_id>` when the Hermes CLI is installed and authenticated.
-- Existing installs pick the preset up automatically; no manual setup is
-  needed beyond having `hermes` on your `PATH`.
+  `--resume <session_id>`; crash recovery (Layer A) captures its session id
+  from the CLI's own startup output through a new stdout-based capture
+  source.
+- Existing installs pick the preset up automatically via a database
+  migration — no manual setup beyond having `hermes` on your PATH.
 
 ## 1.6.0 - 2026-06-02
 
 Orchestrator controls, worker visibility, and protocol-trust fixes.
 
-- Adds a Stop control to the running Orchestrator pane so a runaway
-  Orchestrator can be halted from the UI.
+- Adds a Stop control to the running Orchestrator pane so a runaway Orchestrator
+  can be halted from the UI (the default is auto-approve, so this is the only
+  in-UI kill switch).
 - Surfaces per-worker queue depth and a latest-activity line on worker cards,
-  with clearer status copy for queued or active work.
-- Redelivers worker reports the Orchestrator missed: a report is queued and
-  delivered on the next report or `team list` instead of being lost when the
-  Orchestrator is down or restarting.
-- Stops injecting crash-recovery handover after a deliberate Stop and Restart,
-  so the Orchestrator is not handed stale open tasks it was meant to drop.
+  with a legend on the working badge clarifying that Hive does not auto-detect
+  stalls — the terminal is the source of truth.
+- Redelivers worker reports the Orchestrator missed: a report is no longer
+  silently lost when the Orchestrator is down or restarting; it is queued and
+  redelivered on the next report or `team list`.
+- Stops injecting the crash-recovery handover after a deliberate Stop and
+  Restart, so the Orchestrator is not handed stale open tasks it was meant to
+  drop.
 - Adds an outbound completion webhook setting: Hive POSTs a small JSON payload
-  to a URL you choose when a worker reports or a workflow finishes.
+  to a URL you choose when a worker reports or a workflow finishes — wire it to
+  Slack, ntfy, Feishu, and the like.
 - Adds opt-in structured output to workflow `agent()` via `outputSchema`, so
   fan-out/verify scripts receive a parsed object instead of parsing free text.
 - Adds `team next`: tasks in `.hive/tasks.md` can carry an optional
-  `[needs: #2]` dependency, and `team next` returns the tasks that are
-  unblocked now.
+  `[needs: #2]` dependency, and `team next` returns the tasks that are unblocked
+  now.
 
 ## 1.5.0 - 2026-05-31
 
@@ -110,6 +442,67 @@ Workflow runtime, experimental team automation, and Codex reliability.
 - Hardens Windows and runtime edge cases, including malformed WebSocket frames,
   stale nvm4w Codex node entrypoints, workflow worker exits, and additional
   workflow/runtime cleanup paths.
+
+## 1.4.4 - 2026-05-29
+
+Windows portability and team protocol hardening.
+
+- Fixes Windows `.cmd` / `.bat` launch handling for built-in and custom startup
+  commands, including quoted paths from nvm4w and `Program Files`.
+- Improves Windows runtime shutdown by tearing down WebSocket connections before
+  closing the HTTP server and killing worker process trees with `taskkill /T /F`
+  before falling back to PTY termination.
+- Makes `hive update`, open-in-editor commands, folder picking, filesystem
+  browsing, and port-in-use recovery friendlier on Windows.
+- Preserves CRLF line endings in `.hive/tasks.md` mutations and makes the tasks
+  watcher more tolerant of atomic-save editors.
+- Resolves OpenCode session data under `%LOCALAPPDATA%` on Windows and aligns
+  Claude session path encoding with Claude Code's project directory format.
+- Hardens `team send` against stale worker names by returning a 409 with the
+  current roster and updates orchestrator guidance to refresh the member list
+  before dispatching.
+- Expands Windows-focused unit and integration coverage across startup command
+  parsing, CLI shims, stdin protocol help, terminal profiles, filesystem
+  browsing, process cleanup, and path rendering.
+
+## 1.4.3 - 2026-05-28
+
+Update hardening for multi-Node installs.
+
+- Fixes `hive update` on machines with multiple global npm prefixes. Hive now
+  updates the same npm prefix as the currently running `hive` binary, avoiding
+  cases where npm installs a new copy elsewhere while PATH still resolves an
+  older copy with stale native dependencies.
+- Updates the `hive update --help` copy to explain how custom npm prefixes are
+  handled.
+
+## 1.4.2 - 2026-05-27
+
+Demo video, worker naming, and small UI polish.
+
+- Adds a Bilibili demo video entry to the sidebar footer and replaces the demo
+  workspace mockup with the actual demo video embed.
+- Links the Hive logo and version in the topbar to `hivehq.dev`.
+- Uses role glyph avatars for workers instead of two-letter placeholders.
+- Auto-fills a generated worker name when the Add Member dialog opens and
+  prevents the name from regenerating while the dialog stays open.
+- Trims random worker-name pools to well-known figures for clearer,
+  localized names.
+- Improves the empty Tasks panel with a stronger add-task call to action.
+- Serves the sidebar Bilibili icon from a packaged static asset instead of an
+  inline data URL.
+
+## 1.4.1 - 2026-05-26
+
+Private release-source housekeeping.
+
+- Keeps the packaged product release train on the private release-source
+  repository.
+- Adds attribution and trademark notices to the packaged npm tarball.
+- Documents the private/public repository split so future release work does
+  not accidentally expose internal implementation notes or unreleased product
+  work.
+- Stabilizes the manual startup-command smoke test under full-suite PTY load.
 
 ## 1.4.0 - 2026-05-22
 
@@ -408,7 +801,9 @@ Public-preview surface polish + internal hygiene pass.
   section that surfaces the fully-client-side demo flow (shipped in
   alpha.1 but previously invisible to anyone who had not booted Hive).
 - Bug-report and feature-request issue templates plus `CONTRIBUTING.md`
-  landed; GitHub Community Standards checklist is now green.
+  landed; GitHub Community Standards checklist is now green. A
+  `docs/growth-roadmap.md` working doc was added to track the
+  positioning, brand, and protocol roadmap.
 - Todo drawer rebuilt around the actual task it does: owner-colour
   pills, hover-revealed actions (edit / add subtask / delete), inline
   editing with `\n` sanitisation, optimistic UI with rollback, and a

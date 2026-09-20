@@ -14,19 +14,31 @@ type TerminalLike = {
 const PIXELS_PER_WHEEL_LINE = 16
 const TRACKPAD_DAMPING = 0.3
 
-export type TerminalWheelInputProfile = 'default' | 'opencode'
+export type TerminalWheelInputProfile = 'codex' | 'default' | 'grok' | 'opencode'
 
 type WheelFallbackResult = {
   input: string | null
   handled: boolean
 }
 
-const arrowSequence = (
+const ARROW_FINAL_BYTE = {
+  up: 'A',
+  down: 'B',
+  right: 'C',
+  left: 'D',
+} as const
+
+export type ArrowDirection = keyof typeof ARROW_FINAL_BYTE
+
+// Application-cursor-keys mode swaps the CSI prefix (\x1b[) for SS3 (\x1bO).
+// Shared by the wheel fallback and the mobile keybar so an arrow byte is never
+// computed two different ways.
+export const arrowSequence = (
   applicationCursorKeysMode: boolean | undefined,
-  direction: 'down' | 'up'
+  direction: ArrowDirection
 ) => {
-  const finalByte = direction === 'up' ? 'A' : 'B'
-  return applicationCursorKeysMode ? `\u001bO${finalByte}` : `\u001b[${finalByte}`
+  const finalByte = ARROW_FINAL_BYTE[direction]
+  return applicationCursorKeysMode ? `O${finalByte}` : `[${finalByte}`
 }
 
 const profileSequence = (
@@ -34,11 +46,14 @@ const profileSequence = (
   profile: TerminalWheelInputProfile,
   direction: 'down' | 'up'
 ) => {
-  if (profile === 'opencode') {
-    return direction === 'up' ? '\u001b[5~' : '\u001b[6~'
+  if (profile === 'codex' || profile === 'grok' || profile === 'opencode') {
+    return direction === 'up' ? '[5~' : '[6~'
   }
   return arrowSequence(terminal.modes?.applicationCursorKeysMode, direction)
 }
+
+const forcesWheelFallback = (profile: TerminalWheelInputProfile) =>
+  profile === 'codex' || profile === 'grok' || profile === 'opencode'
 
 export const createAlternateScreenWheelInputResolver = (
   terminal: TerminalLike,
@@ -52,7 +67,7 @@ export const createAlternateScreenWheelInputResolver = (
       return { handled: false, input: null }
     }
     if (
-      profile !== 'opencode' &&
+      !forcesWheelFallback(profile) &&
       terminal.modes?.mouseTrackingMode &&
       terminal.modes.mouseTrackingMode !== 'none'
     ) {

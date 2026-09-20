@@ -2,11 +2,109 @@ import { describe, expect, test } from 'vitest'
 
 import {
   appendChildTaskAtLine,
+  appendTaskToContent,
   countDirectCheckboxChildren,
+  countOpenRootTasks,
   deleteTaskLine,
+  detectEol,
   parseTaskMarkdown,
+  toggleTaskLine,
   updateTaskTextAtLine,
 } from '../../web/src/tasks/task-markdown.js'
+
+describe('line-ending preservation across all mutation helpers', () => {
+  // The Windows + git autocrlf trap: the workspace's `.hive/tasks.md`
+  // round-trips through git with autocrlf=true, so checkouts land with
+  // CRLF line endings. Previously every mutation helper read with
+  // `split(/\r?\n/)` (correct) but wrote with `join('\n')` (regression
+  // generator). Each UI checkbox click flipped the file to LF, git's
+  // smudge filter flipped it back to CRLF on next checkout, the next
+  // click flipped it to LF again — turning a one-line toggle into a
+  // full-file diff every single time.
+  //
+  // The heuristic locks in CRLF if the input already contains CRLF:
+  // once a Windows / git-touched workspace introduces CRLF, mutations
+  // stay in CRLF. Pure-LF files (mac/Linux native) preserve LF.
+
+  test('toggleTaskLine preserves CRLF when the input already has CRLF', () => {
+    const content = '- [ ] alpha\r\n- [ ] beta\r\n'
+    expect(toggleTaskLine(content, 0)).toBe('- [x] alpha\r\n- [ ] beta\r\n')
+  })
+
+  test('toggleTaskLine preserves LF for pure-LF inputs', () => {
+    const content = '- [ ] alpha\n- [ ] beta\n'
+    expect(toggleTaskLine(content, 0)).toBe('- [x] alpha\n- [ ] beta\n')
+  })
+
+  test('updateTaskTextAtLine preserves CRLF', () => {
+    const content = '- [ ] alpha\r\n- [x] beta\r\n'
+    expect(updateTaskTextAtLine(content, 1, 'beta v2')).toBe('- [ ] alpha\r\n- [x] beta v2\r\n')
+  })
+
+  test('deleteTaskLine preserves CRLF', () => {
+    const content = '- [ ] alpha\r\n- [ ] beta\r\n- [ ] gamma\r\n'
+    expect(deleteTaskLine(content, 1)).toBe('- [ ] alpha\r\n- [ ] gamma\r\n')
+  })
+
+  test('appendChildTaskAtLine preserves CRLF for both existing and newly inserted lines', () => {
+    const content = '- [ ] parent\r\n'
+    // The newly inserted child must also be glued with CRLF — otherwise
+    // we'd produce a mixed-EOL file even though we read CRLF and wrote
+    // most lines back with CRLF.
+    expect(appendChildTaskAtLine(content, 0, 'child')).toBe('- [ ] parent\r\n  - [ ] child\r\n')
+  })
+
+  test('appendTaskToContent preserves CRLF when input has CRLF (Windows + git autocrlf)', () => {
+    const content = '- [ ] alpha\r\n- [ ] beta\r\n'
+    // Same trap as the other helpers: a Windows workspace with
+    // `core.autocrlf=true` reads `.hive/tasks.md` as CRLF. If appendTask
+    // hardcodes `\n`, the appended line lands as LF and the file ends up
+    // mixed-EOL — git's smudge filter then flips the whole file every
+    // checkout. The new task line MUST terminate with CRLF.
+    expect(appendTaskToContent(content, 'gamma')).toBe(
+      '- [ ] alpha\r\n- [ ] beta\r\n- [ ] gamma\r\n'
+    )
+  })
+
+  test('appendTaskToContent inserts CRLF separator when CRLF input lacks a trailing newline', () => {
+    const content = '- [ ] alpha\r\n- [ ] beta'
+    expect(appendTaskToContent(content, 'gamma')).toBe(
+      '- [ ] alpha\r\n- [ ] beta\r\n- [ ] gamma\r\n'
+    )
+  })
+
+  test('appendTaskToContent uses LF for pure-LF inputs', () => {
+    const content = '- [ ] alpha\n'
+    expect(appendTaskToContent(content, 'beta')).toBe('- [ ] alpha\n- [ ] beta\n')
+  })
+
+  test('appendTaskToContent on empty content starts with the new task and LF terminator', () => {
+    expect(appendTaskToContent('', 'first')).toBe('- [ ] first\n')
+  })
+})
+
+describe('detectEol', () => {
+  test('returns CRLF whenever the input contains any CRLF sequence', () => {
+    expect(detectEol('- [ ] a\r\n- [ ] b\n')).toBe('\r\n')
+  })
+
+  test('returns LF for pure-LF input', () => {
+    expect(detectEol('- [ ] a\n- [ ] b\n')).toBe('\n')
+  })
+
+  test('returns LF for empty input', () => {
+    expect(detectEol('')).toBe('\n')
+  })
+
+  test('CRLF-dominant mixed input is normalized to CRLF on output', () => {
+    // git autocrlf checkouts always produce uniformly CRLF, but a
+    // hand-edited file may end up mixed. Treat any CRLF as the
+    // signal to use CRLF — preferring "stable on round-trip" over
+    // "preserve every quirk".
+    const content = '- [ ] alpha\r\n- [ ] beta\n'
+    expect(toggleTaskLine(content, 0)).toBe('- [x] alpha\r\n- [ ] beta\r\n')
+  })
+})
 
 describe('updateTaskTextAtLine', () => {
   test('rewrites only the target line and keeps the checkbox state', () => {
@@ -160,6 +258,27 @@ describe('parseTaskMarkdown — fail-soft (with knownWorkerNames)', () => {
     const [task] = parseTaskMarkdown('- [ ] @Alice please review\n', { knownWorkerNames: [] })
     expect(task?.mentions).toEqual([])
     expect(task?.text).toContain('@Alice')
+  })
+})
+
+describe('countOpenRootTasks', () => {
+  test('counts only unchecked root tasks, not unchecked children', () => {
+    const content = '- [ ] root\n  - [ ] child\n- [x] done root\n- [ ] second root\n'
+    expect(countOpenRootTasks(content)).toBe(2)
+  })
+
+  test('uses parser root semantics when the first task is indented', () => {
+    const content = '  - [ ] indented root\n    - [ ] child\n  - [x] done indented root\n'
+    expect(countOpenRootTasks(content)).toBe(1)
+  })
+
+  test('ignores prose and non-checkbox bullets', () => {
+    const content = '# heading\n- ordinary bullet\n- [ ] task\nprose\n'
+    expect(countOpenRootTasks(content)).toBe(1)
+  })
+
+  test('handles CRLF input', () => {
+    expect(countOpenRootTasks('- [ ] alpha\r\n- [x] beta\r\n')).toBe(1)
   })
 })
 

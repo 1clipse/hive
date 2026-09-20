@@ -33,13 +33,14 @@ afterEach(async () => {
 })
 
 describe('tasks websocket server', () => {
-  test('falls back to an empty snapshot when reading tasks fails', async () => {
+  test('sends an error instead of a false empty snapshot when reading tasks fails', async () => {
     const httpServer = createServer()
     const tasksServer = createTasksWebSocketServer(
       httpServer,
       {
         getWorkspaceSnapshot: () => ({ summary: { path: '/unreadable-workspace' } }),
         validateUiToken: () => true,
+        authorizeRemoteTunnelRequest: () => false,
       } as unknown as RuntimeStore,
       {
         readTasks: () => {
@@ -55,8 +56,8 @@ describe('tasks websocket server', () => {
     )
 
     expect(JSON.parse(message)).toEqual({
-      type: 'tasks-snapshot',
-      content: '',
+      type: 'tasks-error',
+      error: 'Failed to read tasks file',
     })
     socket.close()
   })

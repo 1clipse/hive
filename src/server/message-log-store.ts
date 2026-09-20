@@ -1,4 +1,4 @@
-import type { Database } from 'better-sqlite3'
+import type { Database } from './sqlite.js'
 
 export interface MessageLogRecord {
   artifacts?: string[]
@@ -7,7 +7,7 @@ export interface MessageLogRecord {
   status?: string
   text: string
   toAgentId?: string
-  type: 'user_input' | 'send' | 'report' | 'status' | 'system_env_sync' | 'system_recovery_summary'
+  type: 'user_input' | 'send' | 'report' | 'status' | 'system_recovery_summary'
   workerId: string
   workspaceId: string
 }
@@ -63,7 +63,7 @@ interface MessageRow {
   status: string | null
   text: string | null
   to_agent_id: string | null
-  type: 'user_input' | 'send' | 'report' | 'status' | 'system_env_sync' | 'system_recovery_summary'
+  type: 'user_input' | 'send' | 'report' | 'status' | 'system_recovery_summary'
   worker_id: string
 }
 
@@ -110,6 +110,21 @@ export const createMessageLogStore = (db: Database) => {
 
   const deleteMessage = (handle: MessageLogHandle) => {
     db.prepare('DELETE FROM messages WHERE sequence = ?').run(handle.sequence)
+  }
+
+  const hasUserInputSince = (workspaceId: string, agentId: string, sinceMs: number) => {
+    const row = db
+      .prepare(
+        `SELECT 1
+         FROM messages
+         WHERE workspace_id = ?
+           AND type = 'user_input'
+           AND worker_id = ?
+           AND created_at >= ?
+         LIMIT 1`
+      )
+      .get(workspaceId, agentId, sinceMs) as unknown | undefined
+    return row !== undefined
   }
 
   const parseArtifacts = (value: string | null) => {
@@ -179,6 +194,7 @@ export const createMessageLogStore = (db: Database) => {
 
   return {
     deleteMessage,
+    hasUserInputSince,
     insertMessage,
     listMessageKinds,
     listMessagesForRecovery,

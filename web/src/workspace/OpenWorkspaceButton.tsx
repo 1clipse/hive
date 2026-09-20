@@ -4,6 +4,7 @@ import type { WorkspaceSummary } from '../../../src/shared/types.js'
 import { type OpenWorkspaceResult, openWorkspaceInEditor } from '../api.js'
 import type { TranslationKey } from '../i18n.js'
 import { useI18n } from '../i18n.js'
+import { useLayoutMode } from '../mobile/layout-mode.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
 import {
@@ -32,9 +33,10 @@ const ERROR_TOAST_KEY: Record<
 
 export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => {
   const { t } = useI18n()
+  const { mode } = useLayoutMode()
   const toast = useToast()
   const platform = useMemo(() => resolveOpenTargetPlatform(), [])
-  const options = useMemo(() => getOpenTargetOptions(platform), [platform])
+  const options = getOpenTargetOptions(platform)
   const [selectedId, setSelectedId] = useState<OpenTargetId>(() =>
     loadPersistedOpenTargetId(platform)
   )
@@ -43,10 +45,7 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainButtonRef = useRef<HTMLButtonElement>(null)
 
-  const selectedOption = useMemo(
-    () => getOpenTargetOption(selectedId, platform),
-    [platform, selectedId]
-  )
+  const selectedOption = getOpenTargetOption(selectedId, platform)
   const selectedLabel = t(selectedOption.labelKey)
 
   useEffect(() => {
@@ -84,6 +83,14 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
           kind: 'error',
           message: t(ERROR_TOAST_KEY[result.errorCode], { app: t(labelKey) }),
         })
+      } else if (mode === 'mobile') {
+        // The editor opens on the HOST machine — a phone user has no window appearing as feedback,
+        // so confirm the dispatch with a result toast. Desktop stays quiet (the window IS the signal).
+        const labelKey = getOpenTargetOption(result.effectiveTargetId, platform).labelKey
+        toast.show({
+          kind: 'success',
+          message: t('openWorkspace.opened', { app: t(labelKey), workspace: workspace.name }),
+        })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -91,7 +98,7 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
     } finally {
       setIsOpening(false)
     }
-  }, [isOpening, platform, selectedId, t, toast, workspace])
+  }, [isOpening, mode, platform, selectedId, t, toast, workspace])
 
   const disabled = !workspace
   const disabledTooltip = t('openWorkspace.noWorkspace')
@@ -104,7 +111,7 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
     : disabledTooltip
 
   return (
-    <div ref={containerRef} className="relative flex">
+    <div ref={containerRef} className="open-workspace relative flex">
       <Tooltip label={mainTooltip}>
         <span className="flex">
           <button
@@ -114,30 +121,24 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
             data-testid="topbar-open-workspace"
             disabled={disabled || isOpening}
             onClick={() => void handleOpen()}
-            className="flex h-7 items-center gap-1 rounded rounded-r-none border border-r-0 px-2 text-xs font-medium text-ter transition-colors hover:bg-3 hover:text-pri focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-            style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
+            className="open-workspace__main"
           >
-            {isOpening ? (
-              <LoaderCircle size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <img
-                src={selectedOption.iconSrc}
-                alt=""
-                aria-hidden
-                style={{
-                  width: 13,
-                  height: 13,
-                  objectFit: 'contain',
-                  // CSS transform scales the rendered image without enlarging
-                  // the layout box, so a scaled-up icon doesn't make this row
-                  // taller than its neighbors.
-                  transform: selectedOption.iconScale
-                    ? `scale(${selectedOption.iconScale})`
-                    : undefined,
-                  transformOrigin: 'center',
-                }}
-              />
-            )}
+            <span className="open-workspace__trigger-icon" aria-hidden>
+              {isOpening ? (
+                <LoaderCircle size={13} className="animate-spin" />
+              ) : (
+                <img
+                  src={selectedOption.iconSrc}
+                  alt=""
+                  className="open-workspace__trigger-img"
+                  style={{
+                    transform: selectedOption.iconScale
+                      ? `scale(${selectedOption.iconScale})`
+                      : undefined,
+                  }}
+                />
+              )}
+            </span>
             <span>{t('openWorkspace.open')}</span>
           </button>
         </span>
@@ -151,8 +152,7 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
           data-testid="topbar-open-workspace-chevron"
           disabled={disabled}
           onClick={() => setPopoverOpen((value) => !value)}
-          className="flex h-7 w-6 items-center justify-center rounded rounded-l-none border px-0 text-ter transition-colors hover:bg-3 hover:text-pri focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
+          className="open-workspace__chevron"
         >
           <ChevronDown size={12} aria-hidden />
         </button>
@@ -161,8 +161,7 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
         <div
           role="menu"
           aria-label={t('openWorkspace.selectTarget')}
-          className="elev-2 absolute top-8 right-0 z-50 min-w-[180px] rounded border p-1"
-          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-bright)' }}
+          className="open-workspace__menu elev-2"
           data-testid="topbar-open-workspace-menu"
         >
           {options.map((option) => {
@@ -174,24 +173,24 @@ export const OpenWorkspaceButton = ({ workspace }: OpenWorkspaceButtonProps) => 
                 aria-checked={isSelected}
                 type="button"
                 onClick={() => handleSelect(option.id)}
-                className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-pri hover:bg-3"
-                style={isSelected ? { background: 'var(--bg-3)' } : undefined}
+                className="open-workspace__option"
+                data-selected={isSelected ? 'true' : undefined}
                 data-testid={`topbar-open-workspace-option-${option.id}`}
               >
-                <img
-                  src={option.iconSrc}
-                  alt=""
-                  aria-hidden
-                  style={{
-                    width: 14,
-                    height: 14,
-                    objectFit: 'contain',
-                    transform: option.iconScale ? `scale(${option.iconScale})` : undefined,
-                    transformOrigin: 'center',
-                  }}
-                />
+                <span className="open-workspace__option-icon" aria-hidden>
+                  <img
+                    src={option.iconSrc}
+                    alt=""
+                    className="open-workspace__option-img"
+                    style={{
+                      transform: option.iconScale ? `scale(${option.iconScale})` : undefined,
+                    }}
+                  />
+                </span>
                 <span className="flex-1">{t(option.labelKey)}</span>
-                {isSelected ? <Check size={14} className="text-ter" aria-hidden /> : null}
+                <span className="open-workspace__check" aria-hidden>
+                  {isSelected ? <Check size={13} /> : null}
+                </span>
               </button>
             )
           })}

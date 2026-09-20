@@ -19,33 +19,44 @@ export const useFsBrowser = (enabled: boolean) => {
   const browseTokenRef = useRef(0)
   const probeTokenRef = useRef(0)
 
-  const navigate = useCallback(async (path: string) => {
-    const token = ++browseTokenRef.current
-    setLoading(true)
-    try {
-      const result = await browseFs(path)
-      if (browseTokenRef.current !== token) return
-      setBrowse(result)
-      if (result.ok) setSelected(result.current_path)
-    } catch {
-      // network/abort while the dialog is closing — swallow; the stale-token
-      // guard above keeps stale responses from mutating state anyway.
-    } finally {
-      if (browseTokenRef.current === token) setLoading(false)
-    }
+  const clearSelection = useCallback(() => {
+    probeTokenRef.current++
+    setSelected(null)
+    setProbe(null)
   }, [])
+
+  const navigate = useCallback(
+    async (path: string) => {
+      const token = ++browseTokenRef.current
+      setLoading(true)
+      try {
+        const result = await browseFs(path)
+        if (browseTokenRef.current !== token) return
+        setBrowse(result)
+        if (result.ok) {
+          setSelected(result.current_path)
+        } else {
+          clearSelection()
+        }
+      } catch {
+        // network/abort while the dialog is closing — swallow; the stale-token
+        // guard above keeps stale responses from mutating state anyway.
+      } finally {
+        if (browseTokenRef.current === token) setLoading(false)
+      }
+    },
+    [clearSelection]
+  )
 
   useEffect(() => {
     if (!enabled) {
       browseTokenRef.current++
-      probeTokenRef.current++
       setBrowse(EMPTY_BROWSE)
-      setSelected(null)
-      setProbe(null)
+      clearSelection()
       return
     }
     void navigate('')
-  }, [enabled, navigate])
+  }, [clearSelection, enabled, navigate])
 
   useEffect(() => {
     if (!selected) {

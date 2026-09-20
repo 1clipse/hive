@@ -1,12 +1,13 @@
-import type { Database } from 'better-sqlite3'
-
 import type { SessionIdCaptureConfig } from './session-capture.js'
 import { parseSessionIdCapture } from './session-capture.js'
+import type { Database } from './sqlite.js'
 
 export interface AgentLaunchConfigInput {
   command: string
   args?: string[]
   commandPresetId?: string | null
+  /** When set, the PTY starts in this directory instead of the workspace root. */
+  cwd?: string | null
   interactiveCommand?: string | null
   presetAugmentationDisabled?: boolean
   resumedSessionId?: string | null
@@ -45,6 +46,7 @@ interface LaunchConfigRow {
   command: string
   args_json: string
   command_preset_id: string | null
+  cwd?: string | null
   interactive_command: string | null
   preset_augmentation_disabled: number | null
   resume_args_template: string | null
@@ -79,10 +81,7 @@ export const createAgentRunStore = (db: Database) => {
     }
 
     return db
-      .prepare(
-        `SELECT workspace_id, agent_id, command, args_json, command_preset_id, interactive_command, preset_augmentation_disabled, resume_args_template, session_id_capture_json
-         FROM agent_launch_configs ORDER BY updated_at ASC`
-      )
+      .prepare('SELECT * FROM agent_launch_configs ORDER BY updated_at ASC')
       .all()
       .map((row: unknown) => {
         const typedRow = row as LaunchConfigRow
@@ -92,6 +91,7 @@ export const createAgentRunStore = (db: Database) => {
             command: typedRow.command,
             args: parseArgsJson(typedRow.args_json, typedRow.agent_id),
             commandPresetId: typedRow.command_preset_id,
+            cwd: typedRow.cwd ?? null,
             interactiveCommand: typedRow.interactive_command,
             presetAugmentationDisabled: typedRow.preset_augmentation_disabled === 1,
             resumeArgsTemplate: typedRow.resume_args_template,
@@ -118,6 +118,7 @@ export const createAgentRunStore = (db: Database) => {
          command,
          args_json,
          command_preset_id,
+         cwd,
          interactive_command,
          preset_augmentation_disabled,
          resume_args_template,
@@ -125,11 +126,12 @@ export const createAgentRunStore = (db: Database) => {
          created_at,
          updated_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(workspace_id, agent_id) DO UPDATE SET
           command = excluded.command,
           args_json = excluded.args_json,
           command_preset_id = excluded.command_preset_id,
+          cwd = excluded.cwd,
           interactive_command = excluded.interactive_command,
           preset_augmentation_disabled = excluded.preset_augmentation_disabled,
           resume_args_template = excluded.resume_args_template,
@@ -141,6 +143,7 @@ export const createAgentRunStore = (db: Database) => {
       input.command,
       JSON.stringify(input.args ?? []),
       input.commandPresetId ?? null,
+      input.cwd ?? null,
       input.interactiveCommand ?? null,
       input.presetAugmentationDisabled ? 1 : 0,
       input.resumeArgsTemplate ?? null,

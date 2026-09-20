@@ -45,11 +45,8 @@ export const markAgentStarted = (
   workspaceId: string,
   agentId: string
 ) => {
-  // Worker status tracks "is this agent currently working", not "are there
-  // pending tasks". A freshly started PTY hasn't done anything yet, even if
-  // dispatch ledger replayed pendingTaskCount > 0 during hydration. The next
-  // team send will flip status to 'working' via markTaskDispatched.
-  getAgentRecord(workspaces, workspaceId, agentId).status = 'idle'
+  const agent = getAgentRecord(workspaces, workspaceId, agentId)
+  agent.status = isWorkerAgent(agent) ? getStatusFromPendingCount(agent.pendingTaskCount) : 'idle'
 }
 
 export const markAgentStopped = (

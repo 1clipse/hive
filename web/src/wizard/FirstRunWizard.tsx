@@ -1,5 +1,4 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Hexagon } from 'lucide-react'
 import { useState } from 'react'
 
 import { useI18n } from '../i18n.js'
@@ -64,7 +63,13 @@ export const FirstRunWizard = ({
                       border: '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
                     }}
                   >
-                    <Hexagon size={32} />
+                    <img
+                      alt=""
+                      className="h-10 w-10 object-contain"
+                      data-testid="first-run-logo"
+                      draggable={false}
+                      src="/logo.png"
+                    />
                   </div>
                   <div className="space-y-2">
                     {/* Dialog.Title IS the visible welcome heading on slide 0 */}

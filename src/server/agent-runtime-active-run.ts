@@ -13,6 +13,7 @@ export const getActiveRunByAgent = (
     .filter((run) => run.agentId === agentId && getWorkspaceId(run.agentId) === workspaceId)
     .sort((left, right) => right.startedAt - left.startedAt)
     .find((run) => {
+      if (run.userStopped) return false
       const status = syncRun(run).status
       return status === 'starting' || status === 'running'
     })

@@ -100,19 +100,17 @@ test('DemoBanner does not call onExit when rendered without clicking', () => {
 
 // ── App-level integration tests (real server, fetch tracking) ────────────────
 
-test('clicking Try Demo enters demo mode with banner, demo workspace, alice worker, and her last-output line', async () => {
+test('clicking Try Demo enters demo mode with a local interactive replay', async () => {
   render(<App />)
   // Wait for the welcome pane to appear (server has no workspaces)
   await screen.findByTestId('welcome-pane')
 
   fireEvent.click(screen.getByRole('button', { name: /try the demo/i }))
 
-  // Demo banner should appear
   expect(screen.getByTestId('demo-banner')).toBeInTheDocument()
-  // Demo workspace name should appear in sidebar
-  expect(screen.getByText('demo-todo-app')).toBeInTheDocument()
-  // Alice worker should appear
-  expect(screen.getByText('alice')).toBeInTheDocument()
+  expect(screen.getByTestId('demo-replay-panel')).toBeInTheDocument()
+  expect(screen.getByTestId('demo-replay-terminal')).toHaveTextContent('team spawn coder')
+  expect(screen.queryByTestId('demo-video-frame')).toBeNull()
 })
 
 test('demo mode never sends fetch calls for demo-workspace', async () => {
@@ -150,17 +148,16 @@ test('Exit Demo returns to the welcome state', async () => {
   expect(screen.queryByTestId('demo-banner')).toBeNull()
 })
 
-test('demo mode shows DEMO read-only badge and orch scrollback text', async () => {
+test('demo mode shows a pure client replay instead of a fake workspace terminal', async () => {
   render(<App />)
   await screen.findByTestId('welcome-pane')
 
   fireEvent.click(screen.getByRole('button', { name: /try the demo/i }))
 
-  // Read-only badge should appear in demo orchestrator pane
-  expect(screen.getByTestId('terminal-readonly-badge')).toBeInTheDocument()
-  // Orchestrator scrollback content should be visible
-  expect(screen.getByTestId('demo-scrollback-demo-orch')).toBeInTheDocument()
-  expect(screen.getByTestId('demo-scrollback-demo-orch').textContent).toContain('team send alice')
+  expect(screen.getByText(/hive demo workspace/i)).toBeInTheDocument()
+  expect(screen.getByTestId('demo-task-0')).toHaveAttribute('data-done', 'true')
+  expect(screen.queryByTestId('terminal-readonly-badge')).toBeNull()
+  expect(screen.queryByTestId('demo-scrollback-demo-orch')).toBeNull()
 })
 
 test('demo mode surfaces the Todo entry in the Topbar', async () => {
@@ -172,7 +169,5 @@ test('demo mode surfaces the Todo entry in the Topbar', async () => {
 
   expect(screen.getByTestId('topbar-blueprint')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('topbar-blueprint'))
-  await waitFor(() => {
-    expect(screen.getByTestId('task-graph-drawer')).toHaveAttribute('aria-hidden', 'false')
-  })
+  expect(await screen.findByTestId('task-graph-drawer')).toBeInTheDocument()
 })

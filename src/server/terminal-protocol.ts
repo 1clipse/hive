@@ -24,7 +24,13 @@ export const parseTerminalControlMessage = (raw: Buffer | string): TerminalContr
   }
   const resizeCols = asInteger(cols)
   const resizeRows = asInteger(rows)
-  if (parsed.type === 'resize' && resizeCols !== undefined && resizeRows !== undefined) {
+  if (
+    parsed.type === 'resize' &&
+    resizeCols !== undefined &&
+    resizeRows !== undefined &&
+    resizeCols > 0 &&
+    resizeRows > 0
+  ) {
     const message: TerminalControlClientMessage = {
       type: 'resize',
       cols: resizeCols,
@@ -32,8 +38,12 @@ export const parseTerminalControlMessage = (raw: Buffer | string): TerminalContr
     }
     const parsedPixelWidth = asInteger(pixelWidth)
     const parsedPixelHeight = asInteger(pixelHeight)
-    if (parsedPixelWidth !== undefined) message.pixelWidth = parsedPixelWidth
-    if (parsedPixelHeight !== undefined) message.pixelHeight = parsedPixelHeight
+    if (parsedPixelWidth !== undefined && parsedPixelWidth >= 0) {
+      message.pixelWidth = parsedPixelWidth
+    }
+    if (parsedPixelHeight !== undefined && parsedPixelHeight >= 0) {
+      message.pixelHeight = parsedPixelHeight
+    }
     return message
   }
 

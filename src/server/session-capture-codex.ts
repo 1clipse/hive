@@ -1,25 +1,24 @@
 import { closeSync, existsSync, openSync, readdirSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 import { captureSessionIdWithCoordinator } from './claude-session-coordinator.js'
+import { arePathsEqual, expandHomePath, indexOfPathMarker } from './platform-path.js'
 
 const CODEX_SESSION_FILE = /^rollout-.*\.jsonl$/i
+const CODEX_SESSIONS_MARKER = '/sessions/'
 const CODEX_HEADER_READ_CHUNK_BYTES = 4096
 const CODEX_HEADER_MAX_BYTES = 64 * 1024
 
 const getDefaultCodexHome = () => process.env.CODEX_HOME ?? join(homedir(), '.codex')
 
-const expandHome = (path: string) =>
-  path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
-
-export const getCodexHome = (pattern?: string) => {
+export const getCodexHome = (pattern?: string, platform: NodeJS.Platform = process.platform) => {
   if (!pattern) return getDefaultCodexHome()
-  const markerIndex = pattern.indexOf('/sessions/')
+  const markerIndex = indexOfPathMarker(pattern, CODEX_SESSIONS_MARKER, platform)
   if (markerIndex === -1) return getDefaultCodexHome()
-  const rawRoot = pattern.slice(0, markerIndex)
-  if (rawRoot === '~/.codex' || rawRoot === '~/.codex/') return getDefaultCodexHome()
-  const root = expandHome(rawRoot)
+  const rawRoot = pattern.slice(0, markerIndex).replace(/[\\/]+$/u, '')
+  const root = expandHomePath(rawRoot)
+  if (arePathsEqual(root, join(homedir(), '.codex'), platform)) return getDefaultCodexHome()
   return root || getDefaultCodexHome()
 }
 
@@ -86,13 +85,17 @@ const parseCodexSession = (filePath: string) => {
   return id && cwd ? { cwd, id } : null
 }
 
-const listSessionIds = (cwd: string, codexHome = getDefaultCodexHome()) => {
+const listSessionIds = (
+  cwd: string,
+  codexHome = getDefaultCodexHome(),
+  platform: NodeJS.Platform = process.platform
+) => {
   const sessionsRoot = join(codexHome, 'sessions')
   return walkSessionFiles(sessionsRoot)
     .flatMap((filePath) => {
       try {
         const session = parseCodexSession(filePath)
-        return session?.cwd === cwd ? [session.id] : []
+        return session && arePathsEqual(session.cwd, cwd, platform) ? [session.id] : []
       } catch {
         return []
       }
@@ -100,11 +103,45 @@ const listSessionIds = (cwd: string, codexHome = getDefaultCodexHome()) => {
     .sort((left, right) => left.localeCompare(right))
 }
 
-export const hasCodexSession = (cwd: string, sessionId: string, pattern?: string) =>
-  listSessionIds(cwd, getCodexHome(pattern)).includes(sessionId)
+const fileNameMatchesSessionId = (filePath: string, sessionId: string) =>
+  basename(filePath).endsWith(`-${sessionId}.jsonl`)
 
-export const snapshotCodexSessionIds = (cwd: string, codexHome = getDefaultCodexHome()) =>
-  new Set(listSessionIds(cwd, codexHome))
+export const getCodexSessionExistence = (
+  cwd: string,
+  sessionId: string,
+  pattern?: string,
+  platform: NodeJS.Platform = process.platform,
+  codexHome: string = getCodexHome(pattern, platform)
+) => {
+  const sessionsRoot = join(codexHome, 'sessions')
+  let foundUnverifiableMatchingFile = false
+  for (const filePath of walkSessionFiles(sessionsRoot)) {
+    try {
+      const session = parseCodexSession(filePath)
+      if (session?.id === sessionId) return arePathsEqual(session.cwd, cwd, platform)
+      if (!session && fileNameMatchesSessionId(filePath, sessionId)) {
+        foundUnverifiableMatchingFile = true
+      }
+    } catch {
+      if (fileNameMatchesSessionId(filePath, sessionId)) foundUnverifiableMatchingFile = true
+    }
+  }
+  return foundUnverifiableMatchingFile ? undefined : false
+}
+
+export const hasCodexSession = (
+  cwd: string,
+  sessionId: string,
+  pattern?: string,
+  platform: NodeJS.Platform = process.platform,
+  codexHome: string = getCodexHome(pattern, platform)
+) => getCodexSessionExistence(cwd, sessionId, pattern, platform, codexHome) ?? false
+
+export const snapshotCodexSessionIds = (
+  cwd: string,
+  codexHome = getDefaultCodexHome(),
+  platform: NodeJS.Platform = process.platform
+) => new Set(listSessionIds(cwd, codexHome, platform))
 
 export const captureCodexSessionId = async (
   cwd: string,

@@ -196,6 +196,7 @@
 }
 
 html, body {
+  display: block;
   height: 100%;
   margin: 0;
   padding: 0;
@@ -214,7 +215,11 @@ html, body {
      -0.011em tracking) were the loudest "AI-polished" tell in the file. */
 }
 
-#root { height: 100%; }
+#root {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
 
 /* DM Mono — Twenty's monospace. */
 .mono {
@@ -236,7 +241,11 @@ html, body {
 .bg-accent { background: var(--accent); }
 
 /* Scrollbar */
-.scroll-y { overflow-y: auto; }
+.scroll-y {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .scroll-y::-webkit-scrollbar,
 .input::-webkit-scrollbar,
 .xterm-viewport::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -261,29 +270,131 @@ html, body {
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
-/* Workspace row — Twenty's NavigationDrawerItem pattern. The interactive
-   surface is an inset rounded chip (margin + radius 4) rather than an
-   edge-to-edge bar; the active/hover wash sits inside the chip so it reads
-   "selected pill" rather than "highlighted row".
-   Active state ALSO brightens text (Twenty pattern): selected items go
-   from text-secondary to text-primary, so the row persists visually even
-   when the mouse moves away. The React side adds `font-medium` on the
-   workspace name when active. */
-.ws-row {
-  margin: 0 6px;
-  border-radius: 4px;
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
-  cursor: pointer;
-  position: relative;
+.ws-sidebar {
+  min-width: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in oklab, var(--accent) 3.5%, transparent), transparent 24%),
+    var(--bg-0);
 }
-.ws-row:hover { background: color-mix(in oklab, #ffffff 5%, transparent); }
+
+.ws-sidebar-header {
+  min-height: 54px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-1) 45%, transparent);
+}
+
+.ws-sidebar-title__text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.ws-sidebar-count {
+  display: inline-flex;
+  min-width: 21px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding-inline: 6px;
+  color: var(--text-tertiary);
+  background: color-mix(in oklab, var(--bg-3) 58%, transparent);
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-sidebar-list {
+  min-width: 0;
+  overflow-x: hidden;
+  padding: 10px 8px 12px;
+}
+
+.ws-sidebar-item + .ws-sidebar-item {
+  margin-top: 5px;
+}
+
+/* Workspace rows are compact identity cards: enough structure to scan, but
+   intentionally quieter than the active workspace content to their right. */
+.ws-row {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 6px 34px 6px 7px;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+.ws-row::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 22px;
+  background: var(--accent);
+  border-radius: 0 999px 999px 0;
+  transition: transform var(--dur-fast) var(--ease-out), height var(--dur-fast) var(--ease-out);
+  transform-origin: center left;
+}
+.ws-row:hover::before {
+  transform: translateY(-50%) scaleY(0.45);
+  height: 22px;
+}
+.ws-row.active::before {
+  transform: translateY(-50%) scaleY(1);
+  height: 22px;
+}
+.ws-row:hover {
+  border-color: color-mix(in oklab, var(--border-bright) 68%, transparent);
+  background: color-mix(in oklab, var(--bg-2) 72%, transparent);
+  color: var(--text-primary);
+}
 .ws-row.active {
-  background: color-mix(in oklab, #ffffff 7%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 20%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 9%, transparent), transparent 72%),
+    color-mix(in oklab, var(--bg-2) 76%, transparent);
+  color: var(--text-primary);
+  box-shadow: 0 8px 20px rgba(var(--shadow-tint), 0.08);
+}
+.ws-row.active:hover {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright));
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 11%, transparent), transparent 72%),
+    color-mix(in oklab, var(--bg-2) 84%, transparent);
+}
+
+.ws-row__name {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* Sidebar inline delete (per-row) — 18% red wash + 50% red ring (inset, so
    the row geometry stays stable). The icon colour switches via the tailwind
    hover:text-status-red class on the button. */
+.ws-row-delete {
+  top: 50% !important;
+  right: 13px !important;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
+  border-radius: 6px;
+}
 .ws-row-delete:hover {
   background: color-mix(in oklab, var(--status-red) 18%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--status-red) 50%, var(--border-bright));
@@ -291,16 +402,28 @@ html, body {
 
 /* Sidebar add-workspace dashed CTA — gets accent on hover. */
 .ws-add {
-  background: transparent;
+  width: 100%;
+  min-height: 38px;
+  margin: 8px 0 0;
+  border: 1px dashed color-mix(in oklab, var(--border-bright) 72%, transparent);
+  border-radius: 10px;
+  color: var(--text-tertiary);
+  background: color-mix(in oklab, var(--bg-1) 34%, transparent);
+  font-size: 11px;
+  font-weight: 560;
   transition:
     background var(--dur-fast) ease,
     border-color var(--dur-fast) ease,
-    color var(--dur-fast) ease;
+    color var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
 }
 .ws-add:hover {
-  background: color-mix(in oklab, var(--accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 5%, var(--bg-1));
+  border-color: color-mix(in oklab, var(--accent) 36%, var(--border-bright));
   color: var(--text-primary);
+}
+.ws-add:active {
+  transform: scale(0.98);
 }
 
 /* Container-query driven compaction — when the sidebar is dragged narrower
@@ -317,14 +440,25 @@ html, body {
 
 /* Compact mode (≤96px) — Discord-style avatar column. Hide the row layout +
    sidebar title text + count badge + delete-button affordance; surface the
-   avatar cell instead. The inline "New workspace" CTA collapses to an icon-
-   only square so it sits neatly under the avatars instead of stretching. */
+   avatar cell instead. */
+
 @container ws-sidebar (max-width: 96px) {
   .ws-row { display: none; }
   .ws-avatar-cell { display: flex; }
   .ws-sidebar-title__text { display: none; }
   .ws-sidebar-count { display: none; }
   .ws-row-delete { display: none; }
+  .ws-empty {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .ws-empty__wide {
+    display: none;
+  }
   .ws-add--inline {
     margin-left: auto;
     margin-right: auto;
@@ -336,26 +470,102 @@ html, body {
   }
 }
 
-/* Sidebar footer — GitHub repo link pinned to bottom. Label hides under 140px,
-   icon centers under 96px to align with the avatar column. */
 .ws-sidebar-footer {
-  margin-top: auto;
+  margin: auto 8px 9px;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+  border-radius: 11px;
+  padding: 5px;
+  background: color-mix(in oklab, var(--bg-1) 54%, transparent);
+  overflow: hidden;
+}
+.ws-sidebar-footer__link {
+  min-height: 34px;
+  border-radius: 7px;
+  padding: 7px 8px !important;
+  font-size: 11px !important;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.ws-sidebar-footer__link:hover {
+  background: color-mix(in oklab, var(--bg-3) 62%, transparent);
+}
+.ws-sidebar-footer__link + .ws-sidebar-footer__link {
+  margin-top: 2px;
+}
+.ws-sidebar-footer__dismiss {
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, opacity var(--dur-fast) ease;
 }
 @container ws-sidebar (max-width: 140px) {
   .ws-sidebar-footer__label { display: none; }
 }
 @container ws-sidebar (max-width: 96px) {
-  /* The `<a>` is the flex container, not the wrapping `<div>`. Centering must
-     target the link itself so the icon sits in the middle of the column. */
+  .ws-sidebar-footer {
+    margin: auto 4px 8px 4px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+  }
   .ws-sidebar-footer__link {
     justify-content: center;
     padding-left: 0;
     padding-right: 0;
   }
-  /* Hide the dismiss affordance in compact mode — it would otherwise overlap
-     the centered icon. Users can still hide the footer from wide mode. */
+  .ws-sidebar-footer__link:hover {
+    background: transparent;
+  }
+  .ws-sidebar-footer__link + .ws-sidebar-footer__link {
+    border-top: none;
+  }
   .ws-sidebar-footer__dismiss {
     display: none;
+  }
+}
+
+/* Discoverable expand/collapse toggle, living in the sidebar header. It sits in
+   the header's right slot when expanded; the compact query below centers the
+   whole header and gives the toggle a chip surface so it reads as a button in
+   the icon rail rather than a stray glyph. */
+.ws-collapse-toggle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--bg-2) 52%, transparent);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.ws-collapse-toggle:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-2);
+  color: var(--text-primary);
+}
+@container ws-sidebar (max-width: 96px) {
+  .ws-sidebar-header {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .ws-sidebar-title {
+    display: none;
+  }
+  .ws-collapse-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border-color: var(--border);
+    background: var(--bg-1);
+  }
+  .ws-collapse-toggle:hover {
+    background: var(--bg-2);
+    border-color: var(--border-bright);
+    color: var(--text-primary);
   }
 }
 
@@ -389,6 +599,37 @@ html, body {
 .workspace-sidebar-resizer[data-resizing="true"]::before {
   background: color-mix(in oklab, var(--accent) 68%, var(--border-bright));
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.workspace-sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 4px;
+  height: 24px;
+  transform: translateY(-50%);
+  background: var(--border-bright);
+  border-radius: 2px;
+  opacity: 0.35;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) ease,
+    background var(--dur-fast) ease,
+    height var(--dur-fast) ease,
+    width var(--dur-fast) ease,
+    left var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+.workspace-sidebar-resizer:hover::after,
+.workspace-sidebar-resizer:active::after,
+.workspace-sidebar-resizer:focus-visible::after,
+.workspace-sidebar-resizer[data-resizing="true"]::after {
+  opacity: 1;
+  background: var(--accent);
+  left: 1px;
+  width: 6px;
+  height: 36px;
+  box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 40%, transparent);
 }
 
 /* Status dot — neutral baseline used by sidebar / inline indicators */
@@ -653,18 +894,21 @@ html, body {
   position: relative;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color var(--dur-fast) ease,
-    background var(--dur-fast) ease,
-    box-shadow var(--dur-fast) ease;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 .selectable-card--dashed { border-style: dashed; border-color: var(--border-bright); }
 .selectable-card:hover:not([aria-pressed="true"]) {
-  border-color: var(--border-bright);
-  background: color-mix(in oklab, var(--accent) 3%, var(--bg-2));
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 3%, var(--bg-3));
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.selectable-card:active {
+  transform: translateY(0) scale(0.98);
 }
 .selectable-card:focus-visible {
   outline: none;
@@ -673,7 +917,8 @@ html, body {
 }
 .selectable-card[aria-pressed="true"] {
   border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 14%, var(--bg-2));
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, var(--bg-2)), color-mix(in oklab, var(--accent) 3%, var(--bg-2)));
+  box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 16%, transparent), 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* Role badges — flex-shrink:0 + nowrap so they never clip in narrow rows. */
@@ -717,12 +962,1159 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Shared drawer card / tab / section styles ─────────────────────
+   Unified visual language for Memory / Tasks / Workflows drawers.
+   Cards use --bg-2 surface with visible --border-bright edges so rows
+   read as discrete objects. Tabs use an underline-active pattern.
+   Section labels are uppercase micro-headers. */
+
+/* Card — list items inside drawers (memory rows, dream runs, workflow runs).
+   No default padding; memory rows add p-3 inline, workflow rows manage
+   their own internal layout via toggle buttons. */
+.drawer-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+  transition: border-color var(--dur-base) ease, background-color var(--dur-base) ease, box-shadow var(--dur-base) ease, transform var(--dur-base) ease;
+  animation: slideUpFade var(--dur-slow) var(--ease-modal) forwards;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.drawer-card:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Status-indicator borders on drawer cards */
+.drawer-card[data-run-status="running"],
+.drawer-card[data-dream-status="running"] {
+  border-left: 3px solid var(--accent);
+}
+.drawer-card[data-run-status="completed"],
+.drawer-card[data-dream-status="completed"] {
+  border-left: 3px solid var(--status-green);
+}
+.drawer-card[data-run-status="failed"],
+.drawer-card[data-dream-status="failed"] {
+  border-left: 3px solid var(--status-red);
+}
+.drawer-card[data-run-status="stopped"],
+.drawer-card[data-run-status="interrupted"] {
+  border-left: 3px solid var(--text-tertiary);
+}
+.drawer-card[data-dream-status="reverted"] {
+  border-left: 3px solid var(--status-orange);
+}
+.drawer-card[data-pinned="true"] {
+  border-left: 3px solid var(--status-orange);
+}
+.drawer-card[data-disabled="true"] {
+  opacity: 0.6;
+  border-left: 3px solid var(--text-extra-light);
+}
+
+/* Hover dynamic slide-in actions for desktop */
+@media (hover: hover) {
+  .drawer-card__actions {
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
+  }
+  .drawer-card:hover .drawer-card__actions {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Expanded detail area inside a card. */
+.drawer-card__expanded {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Error text inside a card. */
+.drawer-card__error {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in oklab, var(--status-red) 25%, var(--border));
+  font-size: 12px;
+  word-break: break-word;
+  color: var(--status-red);
+}
+
+/* Kind badge in memory rows. */
+.drawer-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-3);
+  border: 1px solid var(--border-bright);
+}
+
+/* Status badge in dream run rows. */
+.drawer-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+}
+.drawer-status-badge--completed {
+  color: var(--status-green);
+  background: color-mix(in oklab, var(--status-green) 12%, transparent);
+  border-color: color-mix(in oklab, var(--status-green) 25%, transparent);
+}
+.drawer-status-badge--failed,
+.drawer-status-badge--error {
+  color: var(--status-red);
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 25%, transparent);
+}
+.drawer-status-badge--running {
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 25%, transparent);
+}
+.drawer-status-badge--interrupted {
+  color: var(--status-orange);
+  background: color-mix(in oklab, var(--status-orange) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-orange) 25%, transparent);
+}
+.drawer-status-badge--stopped {
+  color: var(--text-tertiary);
+  background: color-mix(in oklab, var(--text-tertiary) 10%, transparent);
+  border-color: color-mix(in oklab, var(--text-tertiary) 30%, transparent);
+}
+
+/* Tag chip in memory rows. */
+.drawer-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+}
+
+/* Tab bar — underline active pattern. */
+.drawer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.drawer-tab {
+  position: relative;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease;
+  white-space: nowrap;
+}
+.drawer-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-3);
+}
+.drawer-tab--active {
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.drawer-tab--active:hover {
+  color: var(--accent-hover);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+/* Section header inside drawers (count + action row). */
+.drawer-section {
+  margin-bottom: 16px;
+}
+.drawer-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+/* Section label — uppercase micro-header used for sources, diff categories. */
+.drawer-section-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Settings row — checkbox toggle row inside drawers. */
+.drawer-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-bright);
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--bg-2);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease;
+}
+.drawer-settings-row:hover {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright));
+}
+.drawer-settings-row span {
+  color: var(--text-secondary);
+}
+
+/* Search input inside drawers. */
+.drawer-search {
+  position: relative;
+  display: block;
+  width: 200px;
+  max-width: 38vw;
+}
+
+/* Action button inside drawer sections (e.g. Run Now). */
+.drawer-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-bright);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-2);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.drawer-action-btn:hover {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-2));
+}
+.drawer-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Workflow run filter pills. */
+.wf-run-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-bottom: 2px;
+  margin-top: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-0);
+}
+
+/* Filter pill — run list status filter. */
+.wf-run-filter-pill {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.wf-run-filter-pill:hover {
+  color: var(--text-secondary);
+}
+.wf-run-filter-pill--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.wf-run-filter-pill--active:hover {
+  color: var(--accent-hover);
+}
+.wf-run-filter-pill__count {
+  min-width: 16px;
+  text-align: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+.wf-run-filter-pill--active .wf-run-filter-pill__count {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+/* === Workflow drawer internals === */
+
+.wf-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wf-panel-header__main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wf-panel-header__icon {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+}
+.wf-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-3);
+  color: var(--text-secondary);
+}
+.wf-content-section {
+  margin-bottom: 16px;
+}
+[data-testid='workflows-drawer']:not([data-mobile]) .workflows-content > .scroll-y {
+  display: block;
+}
+[data-testid='workflows-drawer']:not([data-mobile]) .workflows-content > .scroll-y > .mb-4,
+[data-testid='workflows-drawer']:not([data-mobile]) .workflows-content > .scroll-y > .wf-cli-policy {
+  margin-bottom: 0;
+}
+.wf-section-title {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wf-section-label-tight {
+  margin-bottom: 2px;
+}
+.wf-section-subtitle {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.wf-empty-surface {
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+  justify-content: center;
+}
+.wf-empty-inline {
+  border-radius: 14px;
+  border: 1px dashed color-mix(in oklab, var(--border-bright) 75%, transparent);
+  padding: 18px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: color-mix(in oklab, var(--bg-0) 72%, transparent);
+}
+
+/* CLI Policy control card */
+.wf-cli-policy {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+  padding: 10px 12px;
+  margin-bottom: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+.wf-cli-policy__toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.wf-cli-policy__hero {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  margin-bottom: 0;
+}
+.wf-cli-policy__hero-icon {
+  display: flex;
+  height: 26px;
+  width: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.wf-cli-policy__title {
+  margin-bottom: 1px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.wf-cli-policy__desc {
+  max-width: 48ch;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+}
+.wf-cli-policy__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  flex: 0 0 210px;
+  margin-bottom: 0;
+}
+.wf-cli-policy__summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  padding: 5px 7px;
+}
+.wf-cli-policy__summary-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.wf-cli-policy__summary-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.wf-cli-policy__toggle-icon {
+  display: flex;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--text-secondary);
+}
+.wf-cli-policy__body {
+  margin-top: 10px;
+}
+.wf-cli-policy__fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.wf-cli-policy__group {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  padding: 10px;
+}
+.wf-cli-policy__legend {
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.wf-cli-policy__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* Pill-like option for CLI radio/checkbox */
+.wf-cli-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 6px;
+  min-height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: var(--bg-1);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.wf-cli-option:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-bright);
+}
+.wf-cli-option--active {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.wf-cli-policy__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+.wf-cli-policy__footer-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.wf-cli-policy__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.wf-cli-policy__status--saved {
+  color: var(--status-green);
+}
+.wf-cli-policy__status--error {
+  color: var(--text-error);
+}
+.wf-cli-policy__save {
+  gap: 7px;
+  min-width: 92px;
+  justify-content: center;
+}
+.wf-cli-option__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 3px;
+}
+.wf-cli-option__fallback-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+/* Phase strip — compact collapsible section header with inline progress bar */
+.wf-phase-strip {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+  overflow: hidden;
+  transition: border-color var(--dur-fast) ease;
+}
+.wf-phase-strip:hover {
+  border-color: var(--border-bright);
+}
+.wf-phase-strip__toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.wf-phase-strip__toggle:hover {
+  background: var(--bg-0);
+}
+.wf-phase-strip__chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  display: inline-flex;
+}
+.wf-phase-strip__badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  tabular-nums: all;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.wf-phase-strip__badge--done {
+  color: var(--status-green);
+}
+.wf-phase-strip__badge--running {
+  color: var(--accent);
+}
+
+/* Thin progress bar immediately below the toggle button */
+.wf-phase-strip__bar {
+  height: 2px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+.wf-phase-strip__bar > span {
+  display: block;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.wf-phase-strip__bar-fill {
+  background: var(--border-bright);
+}
+.wf-phase-strip__bar-fill--running {
+  background: var(--accent);
+}
+.wf-phase-strip__bar-fill--done {
+  background: var(--status-green);
+}
+
+/* Phase strip body — container for dispatches inside a phase */
+.wf-phase-body {
+  padding: 4px 6px 6px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Dispatch row (agent step) */
+.wf-dispatch-item {
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.wf-dispatch-item[data-dispatch-status='queued'] {
+  border-left: 3px solid var(--text-tertiary);
+}
+.wf-dispatch-item[data-dispatch-status='submitted'] {
+  border-left: 3px solid var(--accent);
+}
+.wf-dispatch-item[data-dispatch-status='reported'] {
+  border-left: 3px solid var(--status-green);
+}
+.wf-dispatch-item[data-dispatch-status='cancelled'] {
+  border-left: 3px solid var(--status-red);
+}
+.wf-dispatch-item[data-dispatch-status='submitted']:hover {
+  border-color: color-mix(in oklab, var(--accent) 24%, var(--border));
+}
+.wf-dispatch-header {
+  width: 100%;
+  display: flex;
+  min-height: 44px;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 8px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.wf-dispatch-header:hover {
+  background: var(--bg-0);
+}
+.wf-dispatch-mark {
+  width: 16px;
+  text-align: center;
+  line-height: 1;
+  margin-top: 1px;
+}
+.wf-dispatch-step {
+  width: 34px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.wf-dispatch-title {
+  display: block;
+  line-height: 1.35;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+.wf-dispatch-summary {
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.35;
+  max-width: 100%;
+  word-break: break-word;
+}
+.wf-dispatch-status {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 0 6px;
+  height: 16px;
+  line-height: 1;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wf-dispatch-status--reported {
+  color: var(--status-green);
+  border-color: color-mix(in oklab, var(--status-green) 32%, var(--border));
+  background: color-mix(in oklab, var(--status-green) 10%, transparent);
+}
+.wf-dispatch-status--submitted {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 32%, var(--border));
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.wf-dispatch-status--queued {
+  color: var(--text-tertiary);
+  border-color: color-mix(in oklab, var(--text-tertiary) 28%, var(--border));
+  background: color-mix(in oklab, var(--text-tertiary) 10%, transparent);
+}
+.wf-dispatch-status--cancelled {
+  color: var(--status-red);
+  border-color: color-mix(in oklab, var(--status-red) 32%, var(--border));
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+}
+
+/* Run row meta strip */
+.wf-run-summary-row {
+  display: flex;
+  align-items: stretch;
+}
+.wf-run-toggle {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.wf-run-toggle:hover {
+  background: var(--bg-0);
+}
+.wf-run-toggle__chevron {
+  color: var(--text-tertiary);
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.wf-run-toggle__icon {
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.wf-run-toggle__main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wf-run-toggle__name {
+  min-width: 0;
+  display: block;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wf-run-toggle__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.wf-run-stop-area {
+  display: flex;
+  align-items: center;
+}
+.wf-run-stop-btn {
+  border-color: color-mix(in oklab, var(--status-red) 30%, var(--border));
+}
+.wf-run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 3px 12px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-0);
+}
+.wf-run-meta__item {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, var(--text-tertiary));
+  padding: 1px 8px;
+  line-height: 1.2;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.wf-run-meta__args {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  color: var(--text-secondary);
+}
+/* Run row expanded detail area */
+.wf-run-detail {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-0);
+}
+
+/* Dispatch detail panel (prompt/report/memory) */
+.wf-dispatch-detail {
+  margin: 4px 8px 6px 52px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.wf-dispatch-detail > div + div {
+  margin-top: 8px;
+}
+.wf-dispatch-detail__label {
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Logs (narrator) panel */
+.wf-logs-panel {
+  margin-top: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  padding: 6px 8px;
+}
+.wf-logs-panel ul {
+  margin: 0;
+  max-height: 168px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  padding-right: 2px;
+}
+.wf-logs-panel__title {
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Result panel */
+.wf-result {
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  padding: 8px 10px;
+}
+.wf-result__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.wf-result__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Tree connector for child runs */
+.wf-run-tree-item {
+  list-style: none;
+}
+.wf-run-tree-item__content {
+  min-width: 0;
+}
+.wf-tree-connector {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  flex-shrink: 0;
+  height: 44px;
+  margin-top: 10px;
+}
+.wf-run-tree-item--child {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.wf-run-tree-item--child .wf-tree-connector::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: -10px;
+  bottom: 12px;
+  border-left: 1px dashed color-mix(in oklab, var(--border) 70%, transparent);
+}
+.wf-run-tree-item--child .wf-tree-connector::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 14px;
+  transform: translateY(-50%);
+  border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.wf-run-tree-item--child .wf-run-tree-item__content > .drawer-card {
+  background: color-mix(in oklab, var(--bg-2) 72%, var(--bg-1));
+}
+
+@media (max-width: 767px) {
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-header {
+    gap: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-header__main {
+    gap: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-header__icon {
+    height: 36px;
+    width: 36px;
+    border-radius: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-header__title {
+    font-size: 15px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-header__meta {
+    gap: 6px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-panel-stat {
+    padding: 3px 8px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-content-section {
+    border-radius: 16px;
+    padding: 12px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-empty-surface {
+    min-height: 220px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy {
+    padding: 12px;
+    border-radius: 16px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__toggle {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__hero {
+    gap: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__hero-icon {
+    height: 30px;
+    width: 30px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__title {
+    font-size: 14px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__desc {
+    font-size: 11px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__summary {
+    flex: 1 1 100%;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__toggle-icon {
+    order: -1;
+    margin-left: auto;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__group {
+    padding: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__options {
+    gap: 6px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-option {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-cli-policy__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .drawer-section__header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-filters {
+    width: 100%;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-filter-pill {
+    padding: 2px 6px;
+    font-size: 9px;
+    min-height: 30px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-filter-pill__count {
+    font-size: 8px;
+    min-width: 14px;
+    padding: 0 3px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-toggle {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-toggle__name {
+    font-size: 11px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-toggle__meta {
+    gap: 4px;
+    row-gap: 2px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-meta {
+    padding-top: 2px;
+    padding-bottom: 3px;
+    gap: 6px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-meta__item {
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-header {
+    padding: 7px 8px;
+    min-height: 38px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-mark,
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-step {
+    margin-top: 0;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-title {
+    font-size: 10px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-summary {
+    font-size: 9px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-dispatch-detail,
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-logs-panel,
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-result {
+    padding: 6px 7px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-detail {
+    padding: 8px;
+    gap: 8px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-tree-connector {
+    height: 44px;
+    margin-top: 8px;
+  }
+  [data-testid='workflows-drawer'][data-mobile='true'] .wf-run-tree-item--child .wf-tree-connector::before {
+    top: -8px;
+    bottom: 10px;
+  }
+}
+
+@media (min-width: 768px) {
+  [data-testid='workflows-drawer']:not([data-mobile]) .wf-run-tree-item {
+    margin-top: 4px;
+  }
+  [data-testid='workflows-drawer']:not([data-mobile]) .wf-run-tree-item:first-child {
+    margin-top: 0;
+  }
+}
+
+/* Schedule row — consistent padding */
+.wf-schedule-row {
+  padding: 8px 12px;
+}
+
 /* Drawer */
 .drawer {
   transform: translateX(100%);
   transition: transform 0.25s ease-out;
 }
 .drawer.open { transform: translateX(0); }
+
+.task-dialog__content {
+  overflow: hidden;
+  background-image:
+    radial-gradient(circle at 12% 0%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-2) 52%, transparent), transparent 26%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 28px 72px rgba(var(--shadow-tint), 0.58),
+    0 10px 24px rgba(var(--shadow-tint), 0.32);
+}
 
 /* Slim 2px progress bar — replaces the full progress card. Solid accent
    (no gradient), 999px ends so the leading edge of the fill looks
@@ -741,26 +2133,119 @@ html, body {
   transition: width 0.15s ease;
 }
 
-/* Header lays out title + counts + actions on one row; bottom edge omitted so
-   the progress bar below reads as the natural separator. */
 .task-drawer__header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px 12px;
+  padding: 18px 20px 16px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-drawer__mark {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
+  border-radius: 11px;
+  color: color-mix(in oklab, var(--accent) 82%, white);
+  background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
+.task-drawer__heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.task-drawer__title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.task-drawer__subtitle {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-drawer__header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.task-drawer__summary {
+  display: inline-flex;
+  min-width: 38px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--text-secondary);
+  background: color-mix(in oklab, var(--bg-3) 72%, transparent);
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-drawer__summary[data-complete='true'] {
+  border-color: color-mix(in oklab, var(--status-green) 24%, var(--border));
+  color: var(--status-green);
+  background: color-mix(in oklab, var(--status-green) 9%, transparent);
 }
 
 /* Progress bar sits flush under the header — acts as the header's lower
-   border, only drawn when there are tasks to count. */
+   border, only drawn when there are tasks to count. When the bar exists, the
+   header border is hidden to avoid double lines. */
+.task-drawer__header:has(+ .task-drawer__progress) {
+  border-bottom-color: transparent;
+}
+
 .task-drawer__progress {
-  margin: 0 16px 8px;
+  height: 3px;
+  margin: 0 20px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: color-mix(in oklab, var(--bg-3) 74%, transparent);
+}
+.task-drawer__progress > span {
+  border-radius: inherit;
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 20%, transparent);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-drawer__content {
+  padding: 16px 18px 20px;
+  scrollbar-gutter: stable;
+}
+
+.task-drawer__lists {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .task-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .task-node {
@@ -774,11 +2259,21 @@ html, body {
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  gap: 12px;
-  border-radius: 6px;
-  padding: 8px 10px 8px 12px;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 10px;
   position: relative;
-  transition: background-color var(--dur-fast) ease;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+
+.task-list > .task-node > .task-row {
+  border-color: color-mix(in oklab, var(--border) 78%, transparent);
+  background: color-mix(in oklab, var(--bg-2) 68%, transparent);
+  box-shadow: 0 8px 22px rgba(var(--shadow-tint), 0.08);
 }
 
 .task-row::before {
@@ -794,19 +2289,30 @@ html, body {
 }
 
 .task-row:hover {
-  background: var(--bg-2);
+  border-color: color-mix(in oklab, var(--border-bright) 82%, transparent);
+  background: color-mix(in oklab, var(--bg-3) 65%, transparent);
+}
+
+.task-row:has(input:checked) {
+  opacity: 0.5;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.task-row:has(input:checked):hover {
+  opacity: 0.85;
+  background: color-mix(in oklab, var(--bg-3) 55%, transparent);
 }
 
 .task-row:hover::before,
 .task-row:focus-within::before {
-  background: color-mix(in oklab, var(--accent) 60%, transparent);
+  background: color-mix(in oklab, var(--accent) 55%, transparent);
 }
 
 .task-row__indicator {
-  margin-top: 2px;
+  margin-top: 0;
   display: inline-flex;
-  height: 20px;
-  width: 20px;
+  height: 18px;
+  width: 18px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -814,8 +2320,8 @@ html, body {
 }
 
 .task-row__title {
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -848,7 +2354,7 @@ html, body {
 .task-row__actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   margin-left: 4px;
   opacity: 0;
   transition: opacity var(--dur-fast) ease;
@@ -861,9 +2367,10 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
-  width: 22px;
-  border-radius: 4px;
+  height: 24px;
+  width: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: var(--text-tertiary);
   background: transparent;
   border: none;
@@ -871,7 +2378,8 @@ html, body {
   transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .task-row__action:hover {
-  background: var(--bg-3);
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--bg-3) 78%, transparent);
   color: var(--text-primary);
 }
 .task-row__action--danger:hover {
@@ -888,12 +2396,12 @@ html, body {
 
 .task-children {
   position: relative;
-  margin-left: 22px;
+  margin: 4px 0 2px 18px;
   padding-left: 14px;
 }
 
-/* Stronger subtask guideline so multi-level nesting reads at a glance — the
-   prior `var(--border)` was too quiet to register against the row hover bg. */
+/* Subtle but readable subtask guideline — a thin dash-patterned vertical line
+   lets the eye trace the hierarchy without adding visual weight. */
 .task-children::before {
   content: "";
   position: absolute;
@@ -901,12 +2409,13 @@ html, body {
   bottom: 8px;
   left: 0;
   width: 1px;
-  background: var(--border-bright);
+  background: color-mix(in oklab, var(--border-bright) 58%, transparent);
+  border-radius: 999px;
 }
 
 .task-status-open {
   color: var(--text-tertiary);
-  background: var(--bg-3);
+  background: color-mix(in oklab, var(--bg-3) 70%, transparent);
 }
 
 .task-status-done {
@@ -925,9 +2434,9 @@ html, body {
   border-radius: 999px;
   font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
-  color: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 35%, white);
-  background: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 16%, transparent);
-  border: 1px solid color-mix(in oklab, var(--owner-tone, var(--status-blue)) 30%, transparent);
+  color: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 28%, white);
+  background: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 11%, transparent);
+  border: 1px solid color-mix(in oklab, var(--owner-tone, var(--status-blue)) 22%, transparent);
 }
 
 /* Legacy alias kept so any external consumer of `.task-mention` doesn't
@@ -953,8 +2462,9 @@ html, body {
   border-radius: 999px;
   padding: 0 6px 0 4px;
   color: var(--text-tertiary);
-  background: var(--bg-3);
-  font-size: 11px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-3) 58%, transparent);
+  font-size: 10px;
 }
 
 /* Inline add-task affordance. Starts as a dashed-ring "ghost row" so it
@@ -964,8 +2474,9 @@ html, body {
   width: 100%;
   align-items: center;
   gap: 12px;
-  border-radius: 6px;
-  padding: 8px 10px 8px 12px;
+  border: 1px dashed color-mix(in oklab, var(--border-bright) 70%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
   text-align: left;
   font-size: 13px;
   color: var(--text-tertiary);
@@ -973,7 +2484,8 @@ html, body {
   transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .task-add-toggle:hover {
-  background: var(--bg-2);
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright));
+  background: color-mix(in oklab, var(--bg-2) 70%, transparent);
   color: var(--text-secondary);
 }
 .task-add-toggle__icon {
@@ -983,18 +2495,45 @@ html, body {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border: 1px dashed var(--border-bright);
+  border: 1px solid var(--border-bright);
   border-radius: 999px;
   color: var(--text-tertiary);
+}
+
+/* Primary variant — the focal CTA inside the empty state. Centered, card-like
+   surface, and a solid (not dashed) accent-tinted plus so it reads as the
+   obvious first action rather than a quiet list affordance. */
+.task-add-toggle--primary {
+  width: auto;
+  min-width: 200px;
+  justify-content: center;
+  padding: 9px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-bright);
+  color: var(--text-primary);
+}
+.task-add-toggle--primary:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border-bright));
+}
+.task-add-toggle--primary .task-add-toggle__icon {
+  height: 18px;
+  width: 18px;
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--accent) 50%, transparent);
+  color: var(--accent);
 }
 
 .task-add-input {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 6px;
-  padding: 8px 10px 8px 12px;
-  background: var(--bg-2);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--border));
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, var(--bg-2) 78%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 5%, transparent);
 }
 .task-add-input__icon {
   display: inline-flex;
@@ -1019,23 +2558,38 @@ html, body {
   color: var(--text-tertiary);
 }
 
+/* Completed tasks section divider — sits between the open list and done list.
+   Uses a ruled-line pattern to signal "content below is archived". */
 .task-completed-toggle {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 6px;
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-top: 4px;
   text-align: left;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-tertiary);
   cursor: pointer;
   transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
+.task-completed-toggle::before {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  order: -1;
+  /* Override: the text comes first so the line is at the right */
+}
 .task-completed-toggle:hover {
-  background: var(--bg-2);
+  color: var(--text-secondary);
+  background: color-mix(in oklab, var(--bg-2) 62%, transparent);
+}
+.task-completed-toggle[aria-expanded="true"] {
   color: var(--text-secondary);
 }
 
@@ -1101,6 +2655,57 @@ html, body {
   outline-offset: 1px;
 }
 
+.task-dialog__content[data-mobile='true'] .task-drawer__header {
+  gap: 10px;
+  padding: 14px 14px 12px;
+  padding-top: max(14px, env(safe-area-inset-top, 0px));
+}
+
+.task-dialog__content[data-mobile='true'] .task-drawer__mark {
+  width: 34px;
+  height: 34px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-drawer__subtitle {
+  display: none;
+}
+
+.task-dialog__content[data-mobile='true'] .task-drawer__summary {
+  min-width: 34px;
+  padding-inline: 7px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-drawer__progress {
+  margin-inline: 14px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-drawer__content {
+  padding: 12px 10px 18px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-list {
+  gap: 7px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+}
+
+.task-dialog__content[data-mobile='true'] .task-row__actions {
+  flex-basis: 100%;
+  justify-content: flex-end;
+  margin: 2px 0 0 26px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.task-dialog__content[data-mobile='true'] .task-children {
+  margin-left: 12px;
+  padding-left: 9px;
+}
+
 /* §6.6.6 cross-pane jump — 1s highlight ring on the target WorkerCard when
    an `@<name>` chip is clicked. The animation is the entire feedback signal;
    if your design tokens don't have a glow var, fall back to the accent ring. */
@@ -1116,16 +2721,19 @@ html, body {
   animation: worker-card-highlight 1000ms ease-out;
 }
 
-/* §3.5.2 + §6.6.4 — Tasks 抽屉 stale overlay. Mirrors the worker-card stale
+/* §3.5.2 + §6.6.4 — Tasks surface stale overlay. Mirrors the worker-card stale
    treatment: desaturate + dim, leaving structure legible. Status / progress
    colors are reapplied at full saturation via nested selectors so users can
    still distinguish open vs done while in stale mode (per §6.6.4 rule that
    `connection=stale` doesn't degrade information density). */
-.drawer--stale {
+.drawer--stale,
+.task-dialog--stale {
   filter: saturate(0.35) brightness(0.85);
 }
 .drawer--stale .task-status-done,
-.drawer--stale .task-status-open {
+.drawer--stale .task-status-open,
+.task-dialog--stale .task-status-done,
+.task-dialog--stale .task-status-open {
   filter: saturate(1.6) brightness(1.15);
 }
 
@@ -1362,44 +2970,362 @@ html, body {
   background: color-mix(in oklab, var(--border-bright) 80%, transparent);
 }
 
-/* Worker tile grid — elastic auto-fill. Each tile has a 200px minimum and
-   stretches to fill the remaining row width, so columns adapt smoothly to
-   the WorkersPane width: ~200 → 1, ~440 → 2, ~660 → 3, ~880 → 4 … */
+.workers-pane {
+  container-type: inline-size;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in oklab, var(--accent) 4%, transparent), transparent 28%),
+    var(--bg-2);
+}
+
+.workers-pane__header {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 18px 13px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-1) 66%, transparent);
+}
+
+.workers-pane__title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.workers-pane__title {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.workers-pane__count,
+.worker-section__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: color-mix(in oklab, var(--bg-3) 66%, transparent);
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.workers-pane__count {
+  min-width: 22px;
+  height: 22px;
+  padding-inline: 6px;
+  font-size: 10px;
+}
+
+.workers-pane__actions {
+  display: flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.workers-pane__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.workers-pane__summary-item {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--text-tertiary);
+  background: color-mix(in oklab, var(--bg-2) 62%, transparent);
+  font-size: 10px;
+}
+
+.workers-pane__body {
+  padding: 14px 16px 24px;
+  scrollbar-gutter: stable;
+}
+
+.worker-section {
+  margin-bottom: 18px;
+}
+
+.worker-section:last-child {
+  margin-bottom: 0;
+}
+
+.worker-section__heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.worker-section__heading::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: color-mix(in oklab, var(--border) 68%, transparent);
+}
+
+.worker-section__count {
+  min-width: 19px;
+  height: 19px;
+  padding-inline: 5px;
+  font-size: 9px;
+}
+
+/* Member grid uses the pane itself as the responsive boundary. Compact panes
+   become a calm single-column roster; wide panes fan out into identity cards. */
 .worker-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  align-items: start;
   gap: 10px;
 }
 
-/* Worker card — centered "person tile" with hero avatar, name, role text,
-   status indicator. Uses .card / .card--interactive shadow + hover lift. */
+@container (max-width: 680px) {
+  .worker-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 460px) {
+  .workers-pane__header {
+    padding: 13px 12px 11px;
+  }
+
+  .workers-pane__title-row {
+    flex-wrap: wrap;
+  }
+
+  .workers-pane__actions {
+    width: 100%;
+    margin: 2px 0 0;
+    justify-content: flex-end;
+  }
+
+  .workers-pane__body {
+    padding: 12px 10px 20px;
+  }
+}
+
 .worker-card-shell {
   position: relative;
 }
 
-/* Stopped worker — the card visually steps back so a grid mixing working
-   and stopped agents reads at a glance. Reduced opacity + slight desat
-   on the card body. Hover restores full saturation so the user can still
-   inspect / restart the agent without the chrome fighting them. */
-.worker-card-shell[data-status='stopped'] .worker-card {
-  opacity: 0.65;
-  filter: saturate(0.6);
+.worker-card-shell:not([data-mobile='true']) .worker-card {
+  min-height: 96px;
+  gap: 11px;
+  border: 1px solid color-mix(in oklab, var(--border-bright) 78%, transparent);
+  border-radius: 11px;
+  padding: 13px 14px !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.018), transparent 45%),
+    color-mix(in oklab, var(--bg-1) 94%, var(--bg-2));
+  box-shadow: 0 8px 24px rgba(var(--shadow-tint), 0.1);
   transition:
-    opacity var(--dur-fast) ease,
-    filter var(--dur-fast) ease;
-}
-.worker-card-shell[data-status='stopped']:hover .worker-card,
-.worker-card-shell[data-status='stopped']:focus-within .worker-card {
-  opacity: 1;
-  filter: none;
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
-/* Worker-card status pill — `.pill` does the chrome; this only adds the
-   layout hook so the pill aligns at the start of the flex column. The
-   tone modifier (.pill--green / --orange / --red / --ghost) is set by
-   the React side based on the status kind. */
+.worker-card-shell:not([data-mobile='true']) .worker-card:hover {
+  transform: translateY(-1px);
+}
+
+.worker-card-shell:not([data-mobile='true']) .worker-card:focus-visible {
+  outline: none;
+  border-color: color-mix(in oklab, var(--accent) 48%, var(--border-bright));
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--accent) 13%, transparent),
+    0 12px 30px rgba(var(--shadow-tint), 0.18);
+}
+
+.worker-card__identity-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.worker-card__identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worker-card__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-card__footer {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  border-top: 1px solid color-mix(in oklab, var(--border) 62%, transparent);
+  padding-top: 9px;
+}
+
+.worker-card--with-actions .worker-card__footer {
+  padding-right: 104px;
+}
+
+.worker-card__ephemeral {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: var(--text-tertiary);
+  background: var(--bg-2);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Working State - Subtle green wash background & border */
+.worker-card-shell:not([data-mobile='true'])[data-status='working'] .worker-card {
+  border-color: color-mix(in oklab, var(--status-green) 20%, var(--border));
+  background:
+    linear-gradient(145deg, color-mix(in oklab, var(--status-green) 4%, transparent), transparent 55%),
+    var(--bg-1);
+}
+.worker-card-shell:not([data-mobile='true'])[data-status='working']:hover .worker-card,
+.worker-card-shell:not([data-mobile='true'])[data-status='working']:focus-within .worker-card {
+  border-color: color-mix(in oklab, var(--status-green) 38%, var(--border-bright));
+  box-shadow: 0 12px 28px color-mix(in oklab, var(--status-green) 8%, transparent);
+}
+
+/* Idle State - Sophisticated charcoal grey */
+.worker-card-shell:not([data-mobile='true'])[data-status='idle'] .worker-card {
+  border-color: var(--border-bright);
+}
+.worker-card-shell:not([data-mobile='true'])[data-status='idle']:hover .worker-card,
+.worker-card-shell:not([data-mobile='true'])[data-status='idle']:focus-within .worker-card {
+  border-color: color-mix(in oklab, var(--accent) 26%, var(--border-bright));
+  box-shadow: 0 12px 30px rgba(var(--shadow-tint), 0.2);
+}
+
+/* Stopped State - Dimmed crust style with faint crimson glow on hover */
+.worker-card-shell:not([data-mobile='true'])[data-status='stopped'] .worker-card {
+  opacity: 0.7;
+  filter: saturate(0.72);
+  background: color-mix(in oklab, var(--bg-crust) 72%, var(--bg-1));
+  border-color: color-mix(in oklab, var(--border) 72%, transparent);
+}
+.worker-card-shell:not([data-mobile='true'])[data-status='stopped']:hover .worker-card,
+.worker-card-shell:not([data-mobile='true'])[data-status='stopped']:focus-within .worker-card {
+  opacity: 1;
+  filter: none;
+  border-color: color-mix(in oklab, var(--status-red) 24%, var(--border-bright));
+  background: color-mix(in oklab, var(--status-red) 2%, var(--bg-1));
+  box-shadow: 0 12px 28px color-mix(in oklab, var(--status-red) 6%, transparent);
+}
+
+/* Worker role description — typography first, clean and readable */
+.worker-card__role-tag {
+  display: block;
+  font-size: 11px;
+  font-weight: 520;
+  color: var(--text-tertiary);
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* In-place renaming input inside worker card */
+.worker-card-name-input {
+  width: 100%;
+  height: 28px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in oklab, var(--accent) 34%, var(--border-bright));
+  border-radius: 7px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  background: color-mix(in oklab, var(--bg-2) 82%, transparent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.worker-card-name-input:focus {
+  outline: none;
+  border-color: color-mix(in oklab, var(--accent) 62%, var(--border-bright));
+  background: var(--bg-1);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.worker-card-name-input:disabled {
+  color: var(--text-tertiary);
+  cursor: wait;
+}
+
+.worker-card-shell:not([data-mobile='true']) .worker-card-name-input {
+  max-width: min(240px, 100%);
+}
+
+/* Fade out ephemeral badge on card hover to avoid layout collision with action buttons */
+.worker-card-shell:hover [data-testid="worker-card-ephemeral-badge"] {
+  opacity: 0;
+  pointer-events: none;
+}
+[data-testid="worker-card-ephemeral-badge"] {
+  transition: opacity 0.15s ease;
+}
+
+/* Working status avatar breathing glow — soft and non-intrusive */
+@keyframes avatar-pulse {
+  0% {
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px rgba(84, 162, 113, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 5px rgba(84, 162, 113, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px rgba(84, 162, 113, 0.5);
+  }
+}
+.worker-card-shell:not([data-mobile='true'])[data-status='working'] [data-status-ring='working'] {
+  animation: avatar-pulse 2.2s infinite ease-in-out !important;
+}
+
 .worker-card__status {
   align-self: flex-start;
+  min-height: 20px;
+  border-color: transparent;
+  background: transparent;
+  padding-inline: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 
 .worker-card-shell:hover .worker-card__actions,
@@ -1408,20 +3334,43 @@ html, body {
   transform: translateY(0);
   pointer-events: auto;
 }
+/* Touch options for mobile view compatibility (fallback) */
+.worker-card-shell[data-mobile='true'] .worker-card__actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.worker-card-shell[data-mobile='true'] .worker-card__action {
+  width: 44px;
+  height: 44px;
+}
+
+.orchestrator-pty-slot[data-terminal-slot-run-id] .orchestrator-pty-placeholder {
+  display: none;
+}
+
+/* Floated actions bar with blur effect */
 .worker-card__actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  right: 12px;
+  bottom: 10px;
   display: flex;
   align-items: center;
   gap: 4px;
   opacity: 0;
   transform: translateY(-2px);
   transition:
-    opacity var(--dur-fast) ease,
-    transform var(--dur-fast) ease;
+    opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
   z-index: 2;
+  background: color-mix(in oklab, var(--bg-1) 82%, transparent) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-radius: 8px !important;
+  padding: 3px !important;
+  border: 1px solid var(--border-bright) !important;
+  box-shadow: 0 6px 18px rgba(var(--shadow-tint), 0.24) !important;
 }
 .worker-card__action {
   display: inline-flex;
@@ -1429,7 +3378,7 @@ html, body {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--border-bright);
   background: var(--bg-2);
   color: var(--text-secondary);
@@ -1444,7 +3393,6 @@ html, body {
   border-color: var(--text-tertiary);
   color: var(--text-primary);
 }
-/* Press affordance — background-darken alone (no scale transform). */
 .worker-card__action:active { background: var(--charcoal-700); }
 .worker-card__action:disabled { opacity: 0.5; cursor: not-allowed; }
 .worker-card__action[data-variant="primary"] {
@@ -1460,6 +3408,229 @@ html, body {
   background: color-mix(in oklab, var(--status-red) 14%, transparent);
   border-color: color-mix(in oklab, var(--status-red) 40%, var(--border-bright));
   color: var(--status-red);
+}
+
+/* Avatar editor — same quiet identity language as the member roster. */
+.worker-avatar-dialog {
+  overflow: hidden;
+  border: 1px solid var(--border-bright);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 34%),
+    var(--bg-elevated);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 28px 72px rgba(var(--shadow-tint), 0.58);
+}
+
+.worker-avatar-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 16px 17px;
+  border-bottom: 1px solid var(--border);
+}
+
+.worker-avatar-dialog__mark {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--accent) 20%, var(--border));
+  border-radius: 10px;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 9%, var(--bg-2));
+}
+
+.worker-avatar-dialog__heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.worker-avatar-dialog__title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.worker-avatar-dialog__subtitle {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-avatar-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 17px 18px;
+}
+
+.worker-avatar-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 17px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-2) 54%, transparent);
+}
+
+.worker-avatar-dialog__error,
+.worker-avatar-picker__error {
+  width: fit-content;
+  border: 1px solid color-mix(in oklab, var(--status-red) 22%, transparent);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: var(--status-red);
+  background: color-mix(in oklab, var(--status-red) 7%, transparent);
+  font-size: 11px;
+}
+
+.worker-avatar-picker {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.worker-avatar-picker__surface {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 14px;
+  background: color-mix(in oklab, var(--bg-2) 68%, transparent);
+  user-select: none;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.worker-avatar-picker__surface[data-dragging='true'] {
+  border-color: color-mix(in oklab, var(--accent) 54%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 6%, var(--bg-2));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 9%, transparent);
+}
+
+.worker-avatar-picker__preview {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  padding: 4px;
+  background: var(--bg-1);
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(var(--shadow-tint), 0.16);
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.worker-avatar-picker__preview:hover {
+  border-color: color-mix(in oklab, var(--accent) 35%, var(--border-bright));
+  transform: translateY(-1px);
+  box-shadow: 0 11px 24px rgba(var(--shadow-tint), 0.22);
+}
+
+.worker-avatar-picker__preview:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 13%, transparent);
+}
+
+.worker-avatar-picker__preview-overlay {
+  position: absolute;
+  inset: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: white;
+  background: rgba(0, 0, 0, 0.52);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.worker-avatar-picker__preview:hover .worker-avatar-picker__preview-overlay,
+.worker-avatar-picker__preview:focus-visible .worker-avatar-picker__preview-overlay {
+  opacity: 1;
+}
+
+.worker-avatar-picker__details {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.worker-avatar-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.worker-avatar-picker__button {
+  min-height: 30px;
+  gap: 6px;
+  padding-inline: 10px;
+  font-size: 11px;
+}
+
+.worker-avatar-picker__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.worker-avatar-picker__status[data-custom='true'] {
+  color: var(--text-secondary);
+}
+
+.worker-avatar-picker__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+}
+
+.worker-avatar-picker__status[data-custom='true'] .worker-avatar-picker__status-dot {
+  background: var(--accent);
+}
+
+.worker-avatar-picker__help {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .worker-avatar-picker__surface {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .worker-avatar-dialog__body {
+    padding-inline: 14px;
+  }
 }
 
 .modal-resize-handle {
@@ -1528,6 +3699,46 @@ html, body {
   background: color-mix(in oklab, var(--accent) 68%, var(--border-bright));
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
 }
+.pane-splitter::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 4px;
+  height: 24px;
+  transform: translateY(-50%);
+  background: var(--border-bright);
+  border-radius: 2px;
+  opacity: 0.35;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) ease,
+    background var(--dur-fast) ease,
+    height var(--dur-fast) ease,
+    width var(--dur-fast) ease,
+    left var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+.pane-splitter:hover::after,
+.pane-splitter:active::after,
+.pane-splitter:focus-visible::after,
+.pane-splitter[data-dragging]::after {
+  opacity: 1;
+  background: var(--accent);
+  left: 1px;
+  width: 6px;
+  height: 36px;
+  box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+
+@media (hover: none) {
+  .workspace-sidebar-resizer::after,
+  .pane-splitter::after {
+    opacity: 0.6;
+    width: 5px;
+    background: var(--text-secondary);
+  }
+}
 
 /* CLI / preset select — wraps a native <select> with custom chrome.
    Drops the system focus outline, replaces the chevron with a lucide one,
@@ -1551,6 +3762,8 @@ html, body {
 .cli-select__leading {
   position: absolute;
   left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--text-tertiary);
   pointer-events: none;
 }
@@ -1639,6 +3852,160 @@ html, body {
   color: var(--accent);
 }
 
+/* Topbar "Open with" launcher. Kept as a small bespoke control instead of a
+   generic listbox so the app icons have a consistent safe-zone and the menu
+   reads like a native launcher rather than a raw dropdown. */
+.open-workspace {
+  --open-workspace-radius: 7px;
+}
+.open-workspace__main,
+.open-workspace__chevron {
+  height: 28px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, white 3%, transparent), transparent),
+    var(--bg-1);
+  color: var(--text-secondary);
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
+}
+.open-workspace__main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 82px;
+  border-right: 0;
+  border-radius: var(--open-workspace-radius) 0 0 var(--open-workspace-radius);
+  padding: 0 9px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.open-workspace__chevron {
+  display: flex;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 var(--open-workspace-radius) var(--open-workspace-radius) 0;
+  padding: 0;
+  box-shadow: inset 1px 0 0 var(--border);
+}
+.open-workspace__main:hover:not(:disabled),
+.open-workspace__chevron:hover:not(:disabled),
+.open-workspace__main[aria-expanded='true'],
+.open-workspace__chevron[aria-expanded='true'] {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, white 5%, transparent), transparent),
+    color-mix(in oklab, var(--accent) 8%, var(--bg-1));
+  border-color: color-mix(in oklab, var(--accent) 38%, var(--border));
+  color: var(--text-primary);
+}
+.open-workspace__main:active:not(:disabled),
+.open-workspace__chevron:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.open-workspace__main:focus-visible,
+.open-workspace__chevron:focus-visible {
+  z-index: 1;
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.open-workspace__main:disabled,
+.open-workspace__chevron:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.open-workspace__trigger-icon {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+}
+.open-workspace__trigger-img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  transform-origin: center;
+}
+.open-workspace__menu {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 50;
+  width: 244px;
+  max-height: min(360px, calc(100vh - 72px));
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-bright);
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, white 3%, transparent), transparent 48px),
+    var(--bg-elevated);
+  transform-origin: top right;
+  animation: dialog-scale-pop-in 120ms var(--ease-out) both;
+}
+.open-workspace__option {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.open-workspace__option:hover,
+.open-workspace__option:focus-visible {
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-2));
+  border-color: color-mix(in oklab, var(--accent) 26%, transparent);
+  outline: none;
+}
+.open-workspace__option[data-selected='true'] {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg-2));
+  border-color: color-mix(in oklab, var(--accent) 48%, var(--border-bright));
+  color: var(--text-primary);
+}
+.open-workspace__option-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, white 5%, transparent), transparent),
+    color-mix(in oklab, var(--bg-0) 60%, var(--bg-2));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 70%, transparent);
+}
+.open-workspace__option-img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  transform-origin: center;
+}
+.open-workspace__check {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  color: var(--accent);
+}
+
 /* "Browse marketplace" entry button in AddWorker — same bg-3 invisibility
    issue as the cards; give it an explicit accent-mix hover. */
 .marketplace-browse-btn:hover {
@@ -1651,15 +4018,81 @@ html, body {
    plain `hover:bg-3` is a no-op on the drawer container; cards need
    explicit accent-mix washes to look interactive. Selected cards skip the
    hover wash (they already have an accent border + accent-mix fill). */
+.marketplace-card {
+  background: var(--bg-2);
+  border-color: var(--border-bright);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
 .marketplace-card[data-selected='true'] {
-  border-color: var(--accent);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, var(--bg-2)), color-mix(in oklab, var(--accent) 3%, var(--bg-2))) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 18%, transparent), 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 .marketplace-card:not([data-selected='true']):hover {
-  background: color-mix(in oklab, var(--accent) 6%, var(--bg-2));
-  border-color: color-mix(in oklab, var(--accent) 35%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 4%, var(--bg-3)) !important;
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright)) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 .marketplace-card:not([data-selected='true']):active {
-  background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-3)) !important;
+  transform: translateY(0);
+}
+
+/* Category Navigation styling */
+.marketplace-category-row {
+  position: relative;
+  background: transparent;
+}
+.marketplace-category-row:hover {
+  background: color-mix(in oklab, var(--accent) 6%, transparent) !important;
+}
+.marketplace-category-row[data-active='true'] {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg-3)) !important;
+  color: var(--text-primary) !important;
+}
+.marketplace-category-row[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.marketplace-toggle-row {
+  border-radius: 8px;
+}
+.marketplace-toggle-row:hover {
+  background: color-mix(in oklab, var(--accent) 6%, transparent) !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Lightweight prose for the marketplace preview pane — not a full typography
@@ -1667,65 +4100,72 @@ html, body {
    wading through a <pre> block. Pairs with marked + DOMPurify on the JS side. */
 .marketplace-prose {
   color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.7;
 }
-.marketplace-prose > * + * { margin-top: 8px; }
+.marketplace-prose > * + * { margin-top: 10px; }
 .marketplace-prose h1,
 .marketplace-prose h2,
 .marketplace-prose h3,
 .marketplace-prose h4 {
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.3;
+  line-height: 1.4;
 }
-.marketplace-prose h1 { font-size: 15px; margin-top: 12px; }
-.marketplace-prose h2 { font-size: 13px; margin-top: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
-.marketplace-prose h3 { font-size: 12px; margin-top: 10px; color: var(--text-secondary); }
-.marketplace-prose h4 { font-size: 12px; color: var(--text-secondary); }
+.marketplace-prose h1 { font-size: 16px; margin-top: 14px; }
+.marketplace-prose h2 { font-size: 14px; margin-top: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.marketplace-prose h3 { font-size: 13px; margin-top: 12px; color: var(--text-secondary); }
+.marketplace-prose h4 { font-size: 13px; color: var(--text-secondary); }
 .marketplace-prose p { color: var(--text-primary); }
 .marketplace-prose ul,
-.marketplace-prose ol { padding-left: 18px; }
+.marketplace-prose ol { padding-left: 20px; }
 .marketplace-prose ul { list-style: disc; }
 .marketplace-prose ol { list-style: decimal; }
-.marketplace-prose li + li { margin-top: 2px; }
+.marketplace-prose li + li { margin-top: 4px; }
 .marketplace-prose li { color: var(--text-primary); }
 .marketplace-prose strong { color: var(--text-primary); font-weight: 600; }
 .marketplace-prose em { color: var(--text-secondary); font-style: italic; }
 .marketplace-prose code {
   font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 2px 5px;
+  border-radius: 4px;
   background: var(--bg-3);
-  color: var(--text-secondary);
+  color: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 15%, transparent);
 }
 .marketplace-prose pre {
   font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   background: var(--bg-1);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 10px 12px;
   overflow-x: auto;
 }
-.marketplace-prose pre code { background: transparent; padding: 0; color: var(--text-primary); }
+.marketplace-prose pre code { background: transparent; padding: 0; color: var(--text-primary); border: none; }
 .marketplace-prose blockquote {
-  margin: 8px 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--border-bright);
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+  border-radius: 0 8px 8px 0;
   color: var(--text-secondary);
 }
 .marketplace-prose a {
   color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+  transition: all 0.2s ease;
 }
-.marketplace-prose a:hover { color: var(--accent-hover); }
+.marketplace-prose a:hover {
+  color: var(--accent-hover);
+  border-bottom-style: solid;
+}
 .marketplace-prose hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 12px 0;
+  margin: 14px 0;
 }
 .marketplace-prose table {
   border-collapse: collapse;
@@ -1737,3 +4177,1720 @@ html, body {
   padding: 4px 8px;
 }
 .marketplace-prose th { background: var(--bg-2); color: var(--text-secondary); }
+
+/* ── Mobile shell (M5b) ─────────────────────────────────────────────────── */
+/* The shell itself owns the full viewport height (h-dvh) and stacks the
+   topbar / section content / bottom nav vertically. Tap targets follow the
+   44px touch minimum. These rules only ever apply inside [data-mobile-shell],
+   which never renders on the desktop (wide) branch. */
+:root {
+  /* Height of the bottom nav's content (excl. the iOS home-indicator inset).
+     Full-screen page portals subtract this so the pinned nav stays tappable. */
+  --mobile-nav-h: 56px;
+}
+.mobile-topbar {
+  /* clear the notch / Dynamic Island — env() is 0 where there's no inset, and
+     now that the viewport meta carries viewport-fit=cover iOS reports it.
+     Left/right cover the landscape notch. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.mobile-bottom-nav {
+  /* Pinned above the full-screen page portals (Tasks / Flows, z-50) so a tab is
+     always one tap away; padding clears the iOS home indicator (and the
+     landscape notch on the sides). */
+  position: relative;
+  z-index: 60;
+  box-sizing: border-box;
+  height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.mobile-bottom-nav__tab {
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-bottom-nav__tab[data-active='true'] {
+  font-weight: 600;
+}
+.mobile-shell {
+  inline-size: 100%;
+  max-inline-size: 100vw;
+  overflow-x: hidden;
+}
+.mobile-shell main,
+.mobile-shell [data-mobile-section='team'],
+.mobile-shell [data-testid='workspace-detail-panes'],
+.mobile-shell [data-testid='mobile-team-panel'] {
+  min-width: 0;
+  max-width: 100%;
+}
+.mobile-team-pane {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  contain: layout paint;
+}
+.mobile-team-pane[data-active='false'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mobile-team-pane[data-active='true'] {
+  visibility: visible;
+  pointer-events: auto;
+}
+.mobile-shell .workers-pane-body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  contain: layout paint;
+  will-change: scroll-position;
+}
+.mobile-shell .worker-card-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.mobile-shell .worker-card-grid > li {
+  content-visibility: auto;
+  contain-intrinsic-size: 132px;
+}
+.mobile-shell .workers-pane-body .status-dot--working,
+.mobile-shell .workers-pane-body .status-dot--queued {
+  animation: none;
+}
+.mobile-shell [data-testid^='terminal-'] {
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+.mobile-shell .xterm,
+.mobile-shell .xterm-screen,
+.mobile-shell .xterm-viewport {
+  touch-action: none;
+}
+.mobile-shell .xterm-viewport {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
+}
+.mobile-terminal-jump-button {
+  z-index: 40;
+  min-height: 44px;
+  min-width: 44px;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-shell .mobile-topbar a,
+.mobile-shell .mobile-topbar button {
+  min-height: 44px;
+}
+
+/* Terminal slots clip their content — an xterm canvas mid-refit must never
+   stretch flex ancestors (it reads as the page "shrinking into place" on
+   phones while fit() converges). min-width:0 breaks the flex min-content
+   propagation; overflow:hidden clips the brief oversize. */
+[data-pty-slot] {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Phones: kill pull-to-refresh / rubber-band chaining — a stray downward
+   drag in scrollback must never reload the page out from under live PTYs. */
+@media (max-width: 767px) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+  .mobile-shell main {
+    overscroll-behavior: contain;
+  }
+}
+
+/* Touch devices: hover-revealed affordances must be permanently visible —
+   there is no hover to reveal them. (Pointer-coarse JSX variants cover the
+   Tailwind-styled spots; these are the stylesheet-driven ones.) */
+@media (hover: none) {
+  .ws-row-delete,
+  .ws-sidebar-footer__dismiss {
+    opacity: 1;
+  }
+  /* Stopped workers stay readable — desktop restores via :hover. */
+  .worker-card-shell[data-status='stopped'] .worker-card {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* ── Mobile full-screen drawers + sheet (M5b adapt-b) ───────────────────── */
+/* TaskGraphDrawer / WorkflowsDrawer become full-bleed pages on mobile. The
+   data-mobile flag (set only on the mobile branch) overrides the desktop
+   centered-card sizing; the desktop card keeps its inline min(...) width/height
+   because data-mobile is never set there. Using dvh keeps the panel clear of
+   the mobile browser chrome. */
+[data-testid='task-graph-drawer'][data-mobile='true'],
+[data-testid='workflows-drawer'][data-mobile='true'] {
+  position: fixed;
+  inset: 0;
+  /* stop above the pinned bottom nav so it stays tappable on every tab */
+  bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
+  width: 100vw;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+
+/* The member terminal is TRUE full screen (user call 2026-06): no nav strip
+   underneath, just the terminal and a floating X. The modal carries the
+   notch / home-indicator insets itself since no chrome does it here. */
+[data-testid='worker-modal'][data-mobile='true'] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Settings panel ─────────────────────────────────────────────────────── */
+
+/* Toggle Switch — replaces raw checkboxes in settings. 36×20 track with a
+   sliding 16px thumb. OFF = bg-3 track, ON = accent fill. The transition
+   is kept at 150ms (Twenty's "fast") so the switch feels instant on tap. */
+.settings-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--charcoal-600);
+  cursor: pointer;
+  transition: background var(--dur-base) ease;
+}
+.settings-switch[data-checked] {
+  background: var(--accent);
+}
+.settings-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.settings-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.settings-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur-base) ease;
+}
+.settings-switch[data-checked] .settings-switch__thumb {
+  transform: translateX(16px);
+}
+/* Bigger touch target on mobile */
+@media (pointer: coarse) {
+  .settings-switch {
+    width: 44px;
+    height: 24px;
+  }
+  .settings-switch__thumb {
+    width: 20px;
+    height: 20px;
+  }
+  .settings-switch[data-checked] .settings-switch__thumb {
+    transform: translateX(20px);
+  }
+}
+
+/* Settings section card — wraps each logical group (experimental, webhook,
+   remote) in a bordered container with consistent internal padding. */
+.settings-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--bg-1);
+  transition: border-color var(--dur-fast) ease;
+}
+.settings-section + .settings-section {
+  margin-top: 10px;
+}
+/* Settings details folding container (collapsible card) */
+.settings-details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  transition: border-color var(--dur-fast) ease;
+}
+.settings-details + .settings-details,
+.settings-details + .settings-section,
+.settings-section + .settings-details {
+  margin-top: 10px;
+}
+.settings-details__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.settings-details__summary::-webkit-details-marker {
+  display: none;
+}
+.settings-details__summary:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: var(--radius-md);
+}
+.settings-details__content {
+  padding: 0 12px 12px 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+/* Section heading — slightly bolder and less cramped than the old inline
+   label. The icon + text pair stays uppercase and tertiary. */
+.settings-section__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+@media (max-width: 767px) {
+  .settings-section__heading {
+    font-size: 12px;
+  }
+}
+
+/* Settings toggle row — the wrapper around a label+switch pair. The switch
+   sits on the right edge, the label/description fills the left. Uses a
+   semantic <button> for a11y; the button-reset is done here. */
+.settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) ease;
+  cursor: pointer;
+}
+.settings-toggle-row:hover {
+  background: color-mix(in oklab, #ffffff 3%, transparent);
+}
+.settings-toggle-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.settings-toggle-row + .settings-toggle-row {
+  margin-top: 2px;
+}
+
+/* Settings popover entrance — scale-in with subtle fade. Only on desktop;
+   mobile uses the full-screen sheet with its own animation. */
+@keyframes settings-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.settings-popover {
+  animation: settings-pop-in 150ms var(--ease-out) both;
+  transform-origin: top right;
+}
+
+/* The Settings popover becomes a full-screen scrollable sheet on mobile so a
+   long body (Remote section expanded) scrolls instead of clipping. The sheet
+   class already sets inset:0; this just guarantees the dvh height + safe-area
+   padding under the bottom nav. */
+.settings-sheet[data-mobile='true'] {
+  height: 100dvh;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Toast + update prompt viewports clear the bottom nav on mobile. Desktop
+   keeps bottom-8 (no data-mobile). 72px ≈ the bottom-nav height + a gap; the
+   safe-area inset handles the iOS home indicator. */
+.toaster[data-mobile='true'],
+.update-toast[data-mobile='true'] {
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+.package-update-toast[data-mobile='true'] {
+  bottom: calc(144px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Mobile platform foundation (redesign) ──────────────────────────────── */
+/* iOS Safari zooms the whole page when a focused <input>/<textarea> has
+   font-size < 16px. The shared .input is 13px for desktop density; lift it to
+   16px only at the mobile breakpoint so the connect / pairing code fields
+   don't zoom-jump on focus. (The mobile composer is handled at its own class.) */
+@media (max-width: 767px) {
+  .input {
+    font-size: 16px;
+  }
+}
+
+/* The mobile workspace switcher slides in from the left edge. */
+@keyframes dialog-slide-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.dialog-slide-left {
+  animation: dialog-slide-left 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog-slide-left {
+    animation: none;
+  }
+}
+
+/* Bottom sheets rise from the bottom edge (mobile ServerBrowseDialog etc.). */
+@keyframes dialog-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.dialog-slide-up {
+  animation: dialog-slide-up 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog-slide-up {
+    animation: none;
+  }
+}
+
+/* Kill the blue iOS tap-flash app-wide on mobile so taps read as native. */
+.mobile-shell button,
+.mobile-shell a,
+.connect-screen button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Add Worker bottom sheet (phones) ───────────────────────────────────── */
+/* The form's controls are desktop-density; .add-worker-sheet is set only by
+   the mobile branch, so these lifts never touch the desktop dialog. */
+.add-worker-sheet .selectable-card,
+.add-worker-sheet .marketplace-browse-btn,
+.add-worker-sheet [data-testid='role-template-picker-trigger'] {
+  min-height: 48px;
+}
+.add-worker-sheet .icon-btn {
+  min-height: 44px;
+}
+.add-worker-sheet [data-testid='random-worker-name'],
+.add-worker-sheet summary button {
+  min-height: 36px;
+  padding-inline: 10px;
+}
+/* Collapsed <details> summaries (Role instructions / Startup command) read as
+   list rows — give them row height so the chevron toggle is comfortably
+   tappable. */
+.add-worker-sheet summary {
+  min-height: 40px;
+}
+.add-worker-sheet [role='option'] {
+  min-height: 44px;
+}
+.add-worker-sheet [data-testid^='role-template-delete'] {
+  height: 36px;
+  width: 36px;
+}
+
+/* Marketplace as a phone sheet: lift the import CTA to tap size. */
+.marketplace-sheet .icon-btn {
+  min-height: 44px;
+}
+
+/* Focus mode hides the topbar/bottom-nav that normally carry the notch and
+   home-indicator insets — the shell takes them over so the segmented strip
+   and composer don't slide under system UI. */
+.mobile-shell--focus {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* The pane-header buttons that open these sheets (Add member / Shell) are
+   28px desktop chrome — give them tap height on phones. */
+@media (max-width: 767px) {
+  [data-testid='workers-pane'] .icon-btn {
+    min-height: 44px;
+  }
+  /* Worker tiles became ~68px list rows on phones — keep the offscreen-render
+     size estimate honest (overrides the earlier 132px tile estimate). */
+  .mobile-shell .worker-card-grid > li {
+    contain-intrinsic-size: 68px;
+  }
+}
+
+/* ── Terminal scroll smoothness (phones) ────────────────────────────────── */
+/* Scroll repaints stay inside the terminal slot — without containment every
+   scrollback frame can invalidate ancestors. Stacks on the slot's existing
+   min-width/overflow rules. */
+.mobile-shell [data-pty-slot],
+[data-testid='worker-modal'][data-mobile='true'] [data-pty-slot] {
+  contain: layout paint;
+}
+/* The full-screen member terminal portals to <body> — OUTSIDE .mobile-shell —
+   so none of the .mobile-shell touch rules reach it. Mirror them here. */
+[data-testid='worker-modal'][data-mobile='true'] [data-testid^='terminal-'],
+[data-testid='worker-modal'][data-mobile='true'] .xterm,
+[data-testid='worker-modal'][data-mobile='true'] .xterm-screen,
+[data-testid='worker-modal'][data-mobile='true'] .xterm-viewport {
+  touch-action: none;
+}
+[data-testid='worker-modal'][data-mobile='true'] [data-testid^='terminal-'] {
+  overscroll-behavior: contain;
+}
+[data-testid='worker-modal'][data-mobile='true'] .xterm-viewport {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
+}
+
+/* ── Small Viewport Dialog Compression (Desktop) ────────────────────────── */
+/* If the screen height is short (e.g., small laptops or smaller browser windows),
+   we automatically shrink paddings, margins, and gaps inside the Add Worker dialog
+   so that the buttons remain fully visible and clickable without horizontal zoom. */
+@media (min-width: 768px) and (max-height: 768px) {
+  [data-testid='add-worker-content'] {
+    max-height: calc(100vh - 16px) !important;
+  }
+  [data-testid='add-worker-content'] header,
+  [data-testid='add-worker-content'] .border-b {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+  [data-testid='add-worker-content'] .border-t {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  [data-testid='add-worker-content'] .overflow-y-auto {
+    gap: 12px !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+  [data-testid='add-worker-content'] .selectable-card {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+}
+
+/* ==========================================================================
+   Hive UI/UX Design System Upgrades (Memory & Workflow Interfaces)
+   ========================================================================== */
+
+/* ── 1. 全局 Dialog / Drawer 美化 ── */
+[data-testid='memory-drawer'],
+[data-testid='action-center-drawer'],
+[data-testid='workflows-drawer'] {
+  border-radius: var(--radius-xl, 16px) !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.45), 0 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  background: color-mix(in oklab, var(--bg-1) 85%, transparent) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 磨砂玻璃 Overlay 遮罩层 */
+[data-testid='memory-overlay'],
+[data-testid='action-center-overlay'],
+[data-testid='workflows-overlay'] {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(5px);
+}
+
+/* 顶部 Header */
+[data-testid='memory-drawer'] header,
+[data-testid='action-center-drawer'] header,
+.wf-panel-header {
+  background: color-mix(in oklab, var(--bg-1) 40%, transparent) !important;
+  backdrop-filter: blur(10px);
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ── Action Center drawer ── */
+.action-center-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-2) 88%, var(--accent) 4%);
+  padding: 16px;
+}
+.action-center-hero[data-state='attention'] {
+  background: color-mix(in oklab, var(--bg-2) 88%, var(--status-orange) 5%);
+  border-color: color-mix(in oklab, var(--status-orange) 26%, var(--border));
+}
+.action-center-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 9%, transparent);
+  color: var(--accent);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.action-center-hero__status {
+  border: 1px solid var(--border-bright);
+  border-radius: 999px;
+  background: var(--bg-1);
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.action-center-metric {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  padding: 12px;
+}
+.action-center-metric__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--bg-3);
+  color: var(--text-secondary);
+}
+.action-center-metric[data-tone='accent'] .action-center-metric__icon {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg-3));
+  color: var(--accent);
+}
+.action-center-metric[data-tone='green'] .action-center-metric__icon {
+  background: color-mix(in oklab, var(--status-green) 12%, var(--bg-3));
+  color: var(--status-green);
+}
+.action-center-metric[data-tone='orange'] .action-center-metric__icon {
+  background: color-mix(in oklab, var(--status-orange) 12%, var(--bg-3));
+  color: var(--status-orange);
+}
+.action-center-panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-2);
+  padding: 12px;
+}
+.action-center-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.action-center-panel__header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.action-center-panel__header p {
+  margin: 3px 0 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.action-center-list-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--bg-1);
+  padding: 9px 10px;
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+.action-center-list-row:hover:not(:disabled) {
+  border-color: var(--border-bright);
+  background: var(--bg-3);
+  transform: translateY(-1px);
+}
+.action-center-list-row:disabled {
+  cursor: default;
+}
+.action-center-row-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+}
+.action-center-list-row[data-tone='accent'] .action-center-row-dot {
+  background: var(--accent);
+}
+.action-center-list-row[data-tone='green'] .action-center-row-dot {
+  background: var(--status-green);
+}
+.action-center-list-row[data-tone='orange'] .action-center-row-dot {
+  background: var(--status-orange);
+}
+.action-center-list-row[data-tone='red'] .action-center-row-dot {
+  background: var(--status-red);
+}
+.action-center-worker-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: var(--bg-3);
+}
+.action-center-attention-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-1);
+  color: var(--text-secondary);
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.action-center-attention-row[data-severity='warning'] {
+  border-color: color-mix(in oklab, var(--status-orange) 24%, var(--border));
+  color: var(--status-orange);
+}
+.action-center-attention-row[data-severity='error'] {
+  border-color: color-mix(in oklab, var(--status-red) 26%, var(--border));
+  color: var(--status-red);
+}
+.action-center-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.action-center-alert--error {
+  border-color: color-mix(in oklab, var(--status-red) 30%, var(--border));
+  background: color-mix(in oklab, var(--status-red) 8%, transparent);
+  color: var(--text-error);
+}
+.action-center-empty {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-bright);
+  border-radius: 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+  padding: 12px;
+}
+
+@media (max-width: 720px) {
+  .action-center-hero {
+    grid-template-columns: 1fr;
+  }
+  .action-center-hero__status {
+    width: max-content;
+  }
+}
+
+/* 胶囊 Tab 切换器 (Segmented Control style) */
+.drawer-tabs {
+  display: flex !important;
+  flex: none !important;
+  background: var(--bg-2) !important;
+  border-radius: 99px !important;
+  padding: 3px !important;
+  gap: 2px !important;
+  border: 1px solid var(--border) !important;
+  align-items: center;
+}
+.drawer-tabs .drawer-tab {
+  flex: none !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-tertiary) !important;
+  border-radius: 99px !important;
+  padding: 5px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  min-height: 26px !important;
+  height: 26px !important;
+  line-height: 1 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer;
+}
+.drawer-tabs .drawer-tab:hover {
+  color: var(--text-secondary) !important;
+}
+.drawer-tabs .drawer-tab--active {
+  background: var(--bg-1) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* 搜索输入框美化 */
+.drawer-search input {
+  border-radius: 99px !important;
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+  transition: all 0.2s ease !important;
+  font-size: 11.5px !important;
+  padding-left: 28px !important;
+}
+.drawer-search input:focus {
+  border-color: var(--accent) !important;
+  background: var(--bg-1) !important;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 15%, transparent) !important;
+}
+
+/* ── 2. 记忆卡片（Memory Rows）美化 ── */
+.drawer-card {
+  border-radius: 12px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-2) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+.drawer-card:hover {
+  transform: translateY(-1.5px);
+  border-color: var(--border-bright) !important;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 记忆分类徽章 */
+.drawer-kind-badge {
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  padding: 1px 7px !important;
+  border-radius: 6px !important;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid transparent !important;
+  display: inline-block;
+}
+
+/* Kind-specific colors */
+.drawer-kind-badge--decision {
+  background: rgba(245, 158, 11, 0.08) !important;
+  color: #f59e0b !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+.drawer-kind-badge--fact {
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+.drawer-kind-badge--pitfall {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+.drawer-kind-badge--preference {
+  background: rgba(16, 185, 129, 0.08) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+.drawer-kind-badge--procedure_ref {
+  background: rgba(139, 92, 246, 0.08) !important;
+  color: #a78bfa !important;
+  border-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Pinned (置顶) 状态记忆的呼吸金光 */
+.drawer-card[data-pinned="true"] {
+  border-color: rgba(234, 179, 8, 0.35) !important;
+  background: linear-gradient(to right, color-mix(in oklab, rgb(234, 179, 8) 4%, var(--bg-2)), var(--bg-2)) !important;
+}
+.drawer-card[data-pinned="true"]:hover {
+  border-color: rgba(234, 179, 8, 0.55) !important;
+}
+
+/* Disabled (停用) 状态记忆的置灰与淡化 */
+.drawer-card[data-disabled="true"] {
+  opacity: 0.5;
+  filter: grayscale(40%);
+}
+
+/* Card 内部折叠区展开动画效果 */
+.drawer-card__expanded {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  animation: slide-down-fade 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slide-down-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── 3. 开关滑块 Toggle Switch（ checkbox 升级） ── */
+.drawer-settings-row {
+  position: relative !important;
+  padding-right: 54px !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-2) !important;
+  padding: 10px 14px !important;
+  cursor: pointer;
+  transition: all 0.2s ease !important;
+  font-weight: 500;
+}
+.drawer-settings-row:hover {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright)) !important;
+  background: color-mix(in oklab, var(--accent) 2%, var(--bg-2)) !important;
+}
+.drawer-settings-row input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 36px !important;
+  height: 20px !important;
+  border-radius: 99px !important;
+  background: var(--bg-3) !important;
+  position: absolute !important;
+  right: 14px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid var(--border) !important;
+  outline: none !important;
+}
+.drawer-settings-row input[type="checkbox"]::after {
+  content: '' !important;
+  position: absolute !important;
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  background: var(--text-tertiary) !important;
+  left: 2px !important;
+  top: 2px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.drawer-settings-row input[type="checkbox"]:checked {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.drawer-settings-row input[type="checkbox"]:checked::after {
+  transform: translateX(16px) !important;
+  background: #ffffff !important;
+}
+.drawer-settings-row input[type="checkbox"]:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* ── 4. 梦境运行 (Dream Runs) 科幻体验 ── */
+.drawer-action-btn {
+  border-radius: 99px !important;
+  padding: 0 16px !important;
+  font-weight: 600 !important;
+  border-color: var(--border-bright) !important;
+  height: 30px !important;
+}
+
+/* Dreaming “Run Now” 渐变流光呼吸特效 */
+button.drawer-action-btn:has(svg.animate-spin),
+button.drawer-action-btn:hover:has(svg) {
+  background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%) !important;
+  border-color: transparent !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35) !important;
+}
+button.drawer-action-btn svg {
+  transition: transform 0.2s ease;
+}
+button.drawer-action-btn:hover svg {
+  transform: scale(1.1) rotate(10deg);
+}
+
+/* 梦境运行卡片处于不同状态的样式 */
+.drawer-card[data-dream-status="running"] {
+  border-color: rgba(168, 85, 247, 0.4) !important;
+  background: linear-gradient(135deg, color-mix(in oklab, #a855f7 8%, var(--bg-2)), var(--bg-2)) !important;
+  box-shadow: inset 0 0 12px rgba(168, 85, 247, 0.08) !important;
+  animation: dream-running-pulse 2s infinite ease-in-out;
+}
+.drawer-card[data-dream-status="completed"] {
+  border-color: rgba(34, 197, 94, 0.15) !important;
+}
+.drawer-card[data-dream-status="failed"] {
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+@keyframes dream-running-pulse {
+  0%, 100% { border-color: rgba(168, 85, 247, 0.35); }
+  50% { border-color: rgba(168, 85, 247, 0.65); box-shadow: 0 0 8px rgba(168, 85, 247, 0.15), inset 0 0 12px rgba(168, 85, 247, 0.12) !important; }
+}
+
+/* 梦境状态 Badge 润色 */
+.drawer-status-badge {
+  font-size: 9px !important;
+  text-transform: uppercase;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em;
+  padding: 1px 6px !important;
+  border-radius: 99px !important;
+}
+.drawer-status-badge--completed {
+  background: rgba(34, 197, 94, 0.08) !important;
+  color: rgb(34, 197, 94) !important;
+  border: 1px solid rgba(34, 197, 94, 0.18) !important;
+}
+.drawer-status-badge--running {
+  background: rgba(168, 85, 247, 0.08) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(168, 85, 247, 0.18) !important;
+}
+.drawer-status-badge--pending, .drawer-status-badge--queued {
+  background: var(--bg-3) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+}
+.drawer-status-badge--failed {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: rgb(239, 68, 68) !important;
+  border: 1px solid rgba(239, 68, 68, 0.18) !important;
+}
+
+/* 梦境运行展开的 Diff 区块美化 */
+.dream-diff-block {
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+.dream-diff-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.dream-diff-added { color: rgb(34, 197, 94); }
+.dream-diff-rewritten { color: rgb(245, 158, 11); }
+.dream-diff-archived { color: rgb(239, 68, 68); }
+.dream-diff-merged { color: #a855f7; }
+
+/* ── 5. 工作流近期运行（Workflow Runs）美化 ── */
+/* 运行中卡片的呼吸蓝光与滚动极光条 */
+.drawer-card[data-run-status="running"] {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: linear-gradient(to right, color-mix(in oklab, var(--accent) 3%, var(--bg-2)), var(--bg-2)) !important;
+  box-shadow: 0 4px 20px -6px rgba(59, 130, 246, 0.15) !important;
+  animation: wf-running-glow 2.5s infinite ease-in-out;
+}
+/* 卡片左侧流光条 */
+.drawer-card[data-run-status="running"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--accent), #a855f7, var(--accent));
+  background-size: 100% 200%;
+  animation: flowing-gradient 3s infinite linear;
+}
+
+@keyframes wf-running-glow {
+  0%, 100% { border-color: rgba(59, 130, 246, 0.25); }
+  50% { border-color: rgba(59, 130, 246, 0.55); }
+}
+@keyframes flowing-gradient {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 200%; }
+}
+
+.wf-run-summary-row {
+  padding: 12px 14px !important;
+}
+.wf-run-toggle__name {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.wf-run-meta {
+  padding: 0 14px 12px 14px !important;
+  margin-top: -4px !important;
+  border-bottom: none !important;
+}
+.wf-run-meta__item {
+  background: var(--bg-3) !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+}
+
+/* ── 6. 工作流 Dispatch 树与分支虚线美化 ── */
+.wf-run-tree-item {
+  position: relative;
+}
+/* 连接分支的纤细虚线 */
+.wf-tree-connector {
+  position: absolute;
+  left: 14px;
+  top: -12px;
+  bottom: 14px;
+  width: 1px;
+  border-left: 1px dashed rgba(59, 130, 246, 0.3) !important;
+  background: transparent !important;
+}
+.wf-run-tree-item--child {
+  padding-left: 28px !important;
+}
+/* 横向拐角连接线 */
+.wf-run-tree-item--child::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 12px;
+  height: 1px;
+  border-top: 1px dashed rgba(59, 130, 246, 0.3);
+}
+
+/* Dispatch 卡片行优化 */
+.wf-dispatch-item {
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-1) !important;
+  margin-bottom: 4px;
+  transition: all 0.2s ease;
+}
+.wf-dispatch-item:hover {
+  border-color: var(--border-bright) !important;
+  background: var(--bg-2) !important;
+}
+.wf-dispatch-item[data-dispatch-status='submitted'] {
+  border-left: 3px solid var(--accent) !important;
+  background: color-mix(in oklab, var(--accent) 1.5%, var(--bg-1)) !important;
+}
+.wf-dispatch-item[data-dispatch-status='reported'] {
+  border-left: 3px solid var(--status-green) !important;
+}
+.wf-dispatch-header {
+  min-height: 38px !important;
+  padding: 8px 12px !important;
+}
+
+/* 命令行 PTY 实录打字机发光效果 */
+.wf-dispatch-summary font-mono,
+.wf-dispatch-summary .font-mono {
+  background: #090d16 !important;
+  color: rgb(34, 197, 94) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 10px !important;
+  border: 1px solid rgba(34, 197, 94, 0.2) !important;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.08) !important;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-dispatch-summary .text-accent {
+  animation: cursor-pulse 1.2s infinite steps(2, start);
+}
+@keyframes cursor-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* ── Memory drawer — calm, editorial hierarchy ─────────────────────
+   Scoped overrides keep the shared workflow/action-center language intact.
+   Memory is dense reference material, so it favors quiet surfaces, strong
+   typography and compact metadata over decorative glow. */
+.memory-drawer {
+  border-radius: 18px !important;
+  border-color: color-mix(in oklab, var(--border-bright) 82%, transparent) !important;
+  background: var(--bg-1) !important;
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset !important;
+  overflow: hidden;
+}
+
+.memory-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--accent) 8%, transparent), transparent 36%),
+    var(--bg-1) !important;
+  backdrop-filter: none !important;
+}
+
+.memory-drawer__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.memory-drawer__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in oklab, var(--accent) 9%, var(--bg-2));
+  color: var(--accent);
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
+.memory-drawer__title {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.memory-drawer__subtitle {
+  margin-top: 3px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.memory-drawer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-2) 72%, var(--bg-1));
+}
+
+.memory-drawer .drawer-tabs {
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-0);
+}
+
+.memory-drawer .drawer-tab {
+  min-height: 28px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 560;
+}
+
+.memory-drawer .drawer-tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-2);
+}
+
+.memory-drawer .drawer-tab--active,
+.memory-drawer .drawer-tab--active:hover {
+  color: var(--text-primary);
+  background: var(--bg-3);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.memory-search {
+  width: 238px;
+  max-width: 42vw;
+  margin-left: auto;
+}
+
+.memory-search__input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-0);
+  padding: 0 12px 0 32px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+
+.memory-search__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.memory-search__input:focus-visible {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border-bright));
+  background: var(--bg-1);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.memory-drawer__content {
+  padding: 15px 20px 20px;
+  background: color-mix(in oklab, var(--bg-0) 48%, var(--bg-1));
+}
+
+.memory-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.memory-summary__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 560;
+}
+
+.memory-summary__icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-2);
+  color: var(--text-tertiary);
+}
+
+.memory-drawer .drawer-action-btn {
+  height: 30px !important;
+  border-radius: 8px !important;
+  padding: 0 10px !important;
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--border)) !important;
+  background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)) !important;
+  color: var(--accent) !important;
+  box-shadow: none !important;
+  font-size: 11.5px;
+}
+
+.memory-drawer .drawer-action-btn:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border)) !important;
+  background: color-mix(in oklab, var(--accent) 11%, var(--bg-2)) !important;
+}
+
+.memory-list {
+  display: grid;
+  gap: 9px;
+}
+
+.memory-drawer .memory-card {
+  position: relative;
+  padding: 14px 14px 13px;
+  border: 1px solid var(--border) !important;
+  border-radius: 13px !important;
+  background: color-mix(in oklab, var(--bg-2) 82%, var(--bg-1)) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
+  overflow: visible;
+  transition: border-color var(--dur-base) ease, background var(--dur-base) ease, box-shadow var(--dur-base) ease !important;
+}
+
+.memory-drawer .memory-card:hover {
+  border-color: color-mix(in oklab, var(--accent) 16%, var(--border-bright)) !important;
+  background: var(--bg-2) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 8px 24px rgba(0, 0, 0, 0.16) !important;
+  transform: none;
+}
+
+.memory-drawer .memory-card[data-pinned='true'] {
+  border-color: color-mix(in oklab, var(--status-orange) 28%, var(--border)) !important;
+  background: color-mix(in oklab, var(--status-orange) 3%, var(--bg-2)) !important;
+}
+
+.memory-drawer .memory-card[data-disabled='true'] {
+  opacity: 0.58;
+  filter: none;
+}
+
+.memory-card__layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.memory-card__main {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.memory-card__eyebrow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 10.5px;
+}
+
+.memory-drawer .drawer-kind-badge {
+  padding: 2px 7px !important;
+  border-radius: 6px !important;
+  font-size: 9px !important;
+  letter-spacing: 0.045em;
+}
+
+.memory-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--text-tertiary);
+  background: var(--bg-3);
+}
+
+.memory-state--pinned {
+  color: var(--status-orange);
+  background: color-mix(in oklab, var(--status-orange) 9%, transparent);
+}
+
+.memory-card__source {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-card__body {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.memory-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+.memory-drawer .drawer-tag {
+  border-color: color-mix(in oklab, var(--border-bright) 72%, transparent);
+  border-radius: 6px;
+  padding: 1px 6px;
+  background: var(--bg-1);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.memory-card__time + .memory-card__time::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--text-extra-light);
+}
+
+.memory-card__reference {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-card__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.memory-card__actions .icon-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  min-width: 28px;
+  border-radius: 7px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.memory-card:hover .memory-card__actions .icon-btn,
+.memory-card:focus-within .memory-card__actions .icon-btn {
+  opacity: 1;
+}
+
+.memory-card__disclosure {
+  display: grid;
+  width: 24px;
+  height: 28px;
+  place-items: center;
+  color: var(--text-tertiary);
+  transition: color var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+
+.memory-card__disclosure[data-expanded='true'] {
+  color: var(--text-secondary);
+  transform: rotate(180deg);
+}
+
+.memory-drawer .drawer-card__expanded {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+@media (hover: none) {
+  .memory-card__actions .icon-btn {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .memory-drawer {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+  .memory-drawer__header {
+    padding: 15px 14px !important;
+  }
+  .memory-drawer__mark {
+    width: 32px;
+    height: 32px;
+  }
+  .memory-drawer__toolbar--mobile {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 14px;
+  }
+  .memory-drawer__toolbar--mobile .drawer-tabs {
+    width: 100%;
+  }
+  .memory-drawer__toolbar--mobile .drawer-tab {
+    flex: 1;
+  }
+  .memory-search {
+    width: 100%;
+    max-width: none;
+  }
+  .memory-drawer__content {
+    padding: 12px 12px 16px;
+  }
+  .memory-drawer .memory-card {
+    padding: 12px;
+  }
+  .memory-card__layout {
+    gap: 7px;
+  }
+  .memory-card__actions .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ── 7. Result Panel 结果面板与代码高亮 ── */
+.wf-result {
+  border-radius: 10px !important;
+  border: 1px solid var(--border) !important;
+  background: #090d16 !important;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.wf-result__header {
+  background: #121824 !important;
+  border-bottom: 1px solid #1e293b !important;
+  padding: 6px 12px !important;
+}
+.wf-result__label {
+  color: var(--text-secondary) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+}
+.wf-result pre {
+  padding: 12px !important;
+  color: #e2e8f0 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Narrator 叙事者日志栏 */
+.wf-logs-panel {
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-0) !important;
+  padding: 10px 14px !important;
+  margin-top: 10px !important;
+}
+.wf-logs-panel__title {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--text-secondary) !important;
+  margin-bottom: 6px !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wf-logs-panel__title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.wf-logs-panel ul {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* ── 8. 定时调度（Schedules）与策略卡片（CLI Policy） ── */
+.wf-schedule-row {
+  padding: 10px 14px !important;
+}
+.wf-cli-policy {
+  border-radius: 12px !important;
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+  transition: all 0.2s ease;
+}
+.wf-cli-policy__toggle:hover {
+  background: transparent !important;
+}
+.wf-cli-policy__group {
+  border-radius: 10px !important;
+  background: var(--bg-1) !important;
+  border: 1px solid var(--border) !important;
+}
+.wf-cli-option {
+  border-radius: 8px !important;
+}
+
+/* ── 9. 右侧栏中的 CLI Policy 样式定制 (Desktop 两栏优化) ── */
+@media (min-width: 768px) {
+  .wf-sidebar-settings .wf-cli-policy {
+    padding: 14px 12px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__toggle {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    position: relative !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__hero {
+    align-items: flex-start !important;
+    margin-right: 20px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__summary {
+    flex: none !important;
+    grid-template-columns: 1fr !important; /* 卡片改为垂直一列堆叠，防止挤压 */
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__toggle-icon {
+    position: absolute !important;
+    right: 0px !important;
+    top: 0px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__desc {
+    max-width: 100% !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__body {
+    margin-top: 12px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__group {
+    padding: 8px 10px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__options {
+    gap: 4px !important;
+  }
+  .wf-sidebar-settings .wf-cli-option {
+    padding: 0 6px !important;
+    min-height: 24px !important;
+    font-size: 10.5px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .wf-sidebar-settings .wf-cli-policy__save {
+    width: 100% !important;
+  }
+}

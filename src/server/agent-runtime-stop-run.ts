@@ -6,7 +6,8 @@ export const stopLiveRun = (
   agentManager: AgentManager | undefined,
   registry: LiveRunRegistry,
   syncRun: (run: LiveAgentRun) => LiveAgentRun,
-  runId: string
+  runId: string,
+  onUserStop?: (runId: string) => void
 ) => {
   if (!agentManager) {
     throw new Error('Agent manager is required to stop agents')
@@ -22,5 +23,8 @@ export const stopLiveRun = (
     return
   }
 
+  // Reaching here means the run was genuinely live and we are about to kill it
+  // at the user's request — distinct from a crash that already ended the run.
+  onUserStop?.(runId)
   agentManager.stopRun(runId)
 }

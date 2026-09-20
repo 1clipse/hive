@@ -1,0 +1,1 @@
+export const RECALL_QUERY_MAX_CHARS = 240

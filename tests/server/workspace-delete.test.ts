@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { describe, expect, test } from 'vitest'
+import Database from '../../src/server/sqlite.js'
 
 import { getOrchestratorId } from '../../src/server/workspace-store-support.js'
 import { startTestServer } from '../helpers/test-server.js'
@@ -143,7 +142,7 @@ describe('workspace delete API', () => {
         }).then((response) => response.json())
       ).resolves.toEqual({ key: 'active_workspace_id', value: null })
 
-      const verifyDb = new Database(join(server.dataDir, 'runtime.sqlite'), { readonly: true })
+      const verifyDb = new Database(join(server.dataDir, 'runtime.sqlite'), { readOnly: true })
       expect(verifyDb.prepare('SELECT COUNT(*) AS count FROM workspaces').get()).toEqual({
         count: 0,
       })

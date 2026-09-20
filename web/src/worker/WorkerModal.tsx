@@ -1,8 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { AlertTriangle, Play, X } from 'lucide-react'
+import { useLayoutEffect } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { useI18n } from '../i18n.js'
+import { getMobileFocusMode, setMobileFocusMode } from '../mobile/focus-mode.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { CliAgentAvatar } from './CliAgentAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
@@ -33,10 +36,18 @@ export const WorkerModal = ({
   worker,
 }: WorkerModalProps) => {
   const { t } = useI18n()
+  const isMobile = useIsMobile()
   const role = getRolePresentation(worker.role)
   const ptyRunning = !!runId
   const status = presentWorkerRuntimeStatus(ptyRunning)
   const resize = useWorkerModalResize()
+
+  useLayoutEffect(() => {
+    if (!isMobile) return
+    const previous = getMobileFocusMode()
+    setMobileFocusMode(true)
+    return () => setMobileFocusMode(previous)
+  }, [isMobile])
 
   const handleOpenChange = (open: boolean) => {
     if (!open) onClose()
@@ -54,36 +65,44 @@ export const WorkerModal = ({
             data-testid="worker-modal"
             aria-label={t('worker.detail', { name: worker.name })}
             className="dialog-scale-pop pointer-events-auto relative flex h-screen max-h-screen max-w-full flex-col overflow-hidden"
+            data-mobile={isMobile || undefined}
             onEscapeKeyDown={(event) => event.preventDefault()}
-            style={{
-              background: 'var(--bg-1)',
-              width: `${resize.width}px`,
-            }}
+            style={
+              isMobile
+                ? { background: 'var(--bg-1)' }
+                : { background: 'var(--bg-1)', width: `${resize.width}px` }
+            }
           >
-            {/* biome-ignore lint/a11y/useSemanticElements: aria role="separator" is the canonical resize-handle role */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t('worker.widthResize')}
-              aria-valuemin={WORKER_MODAL_MIN}
-              aria-valuenow={Math.round(resize.width)}
-              className="modal-resize-handle modal-resize-handle--left"
-              tabIndex={-1}
-              data-resizing={resize.resizing || undefined}
-              onPointerDown={resize.beginResize('left')}
-            />
-            {/* biome-ignore lint/a11y/useSemanticElements: aria role="separator" is the canonical resize-handle role */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t('worker.widthResize')}
-              aria-valuemin={WORKER_MODAL_MIN}
-              aria-valuenow={Math.round(resize.width)}
-              className="modal-resize-handle modal-resize-handle--right"
-              tabIndex={-1}
-              data-resizing={resize.resizing || undefined}
-              onPointerDown={resize.beginResize('right')}
-            />
+            {/* Desktop-only width resize. A phone modal is full-screen — drag
+                strips at the edges would just fight the user's taps. */}
+            {isMobile ? null : (
+              <>
+                {/* biome-ignore lint/a11y/useSemanticElements: aria role="separator" is the canonical resize-handle role */}
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('worker.widthResize')}
+                  aria-valuemin={WORKER_MODAL_MIN}
+                  aria-valuenow={Math.round(resize.width)}
+                  className="modal-resize-handle modal-resize-handle--left"
+                  tabIndex={-1}
+                  data-resizing={resize.resizing || undefined}
+                  onPointerDown={resize.beginResize('left')}
+                />
+                {/* biome-ignore lint/a11y/useSemanticElements: aria role="separator" is the canonical resize-handle role */}
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('worker.widthResize')}
+                  aria-valuemin={WORKER_MODAL_MIN}
+                  aria-valuenow={Math.round(resize.width)}
+                  className="modal-resize-handle modal-resize-handle--right"
+                  tabIndex={-1}
+                  data-resizing={resize.resizing || undefined}
+                  onPointerDown={resize.beginResize('right')}
+                />
+              </>
+            )}
             <Dialog.Title className="sr-only">{worker.name}</Dialog.Title>
             <Dialog.Description className="sr-only">
               {role.label} agent — status {status.label}
@@ -104,24 +123,59 @@ export const WorkerModal = ({
               </div>
             ) : null}
 
+            {isMobile ? null : (
+              <div
+                className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded border px-2 py-1 text-[11px]"
+                data-testid="worker-modal-close-hint"
+                style={{
+                  background: 'color-mix(in oklab, var(--bg-1) 88%, transparent)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                {t('worker.closeOutsideHint')}
+              </div>
+            )}
+
+            {/* Phones: no control strip (user call 2026-06) — the member sheet
+                on the Team list owns Stop/Restart/etc. Desktop closes via the
+                outside overlay; mobile stays full-screen, so it still needs a
+                visible close affordance. */}
             <div
-              className="relative flex min-h-0 flex-1 flex-col p-3"
+              className={`relative flex min-h-0 flex-1 flex-col${isMobile ? '' : ' p-3'}`}
               data-testid="worker-modal-terminal-slot"
             >
-              <Tooltip label={t('common.close')}>
-                <Dialog.Close asChild>
-                  <button
-                    type="button"
-                    aria-label="Close worker detail"
-                    className="float-action absolute top-4 right-4 z-10"
-                  >
-                    <X size={14} aria-hidden />
-                  </button>
-                </Dialog.Close>
-              </Tooltip>
+              {isMobile ? (
+                <Tooltip label={t('common.close')}>
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      aria-label="Close worker detail"
+                      data-testid="worker-modal-close"
+                      className="float-action absolute top-2 right-2 z-10"
+                      style={{ minHeight: 44, minWidth: 44 }}
+                    >
+                      <X size={16} aria-hidden />
+                    </button>
+                  </Dialog.Close>
+                </Tooltip>
+              ) : (
+                <Tooltip label={t('common.close')}>
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      aria-label="Close worker detail"
+                      data-testid="worker-modal-close"
+                      className="sr-only"
+                    >
+                      {t('common.close')}
+                    </button>
+                  </Dialog.Close>
+                </Tooltip>
+              )}
 
               <div
-                className="flex min-h-0 flex-1 rounded-lg border"
+                className={`flex min-h-0 flex-1${isMobile ? '' : ' rounded-lg border'}`}
                 style={{ background: 'var(--bg-crust)', borderColor: 'var(--border)' }}
               >
                 {ptyRunning ? (
@@ -129,11 +183,13 @@ export const WorkerModal = ({
                     id={`worker-pty-${runId}`}
                     className="flex h-full w-full"
                     data-pty-slot="worker"
+                    data-terminal-auto-focus="true"
                   />
                 ) : (
                   <div className="m-auto flex max-w-[400px] flex-col items-center gap-3 px-6 text-center">
                     <CliAgentAvatar
                       commandPresetId={worker.commandPresetId}
+                      customAvatar={worker.avatar}
                       workerRole={worker.role}
                       size={48}
                     />
@@ -142,9 +198,7 @@ export const WorkerModal = ({
                       {worker.status === 'stopped'
                         ? t('worker.terminalStopped')
                         : t('worker.terminalNotStarted')}
-                      {worker.pendingTaskCount > 0
-                        ? t('worker.pendingResume', { count: worker.pendingTaskCount })
-                        : t('worker.startAgent')}
+                      {t('worker.startAgent')}
                     </div>
                     <button
                       type="button"

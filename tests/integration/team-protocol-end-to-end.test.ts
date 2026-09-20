@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
 
@@ -32,7 +33,7 @@ const waitFor = async (
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -98,8 +99,8 @@ describe('team protocol end to end', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${orchScript}"`],
+            command: process.execPath,
+            args: [orchScript],
           }),
         }
       )
@@ -111,8 +112,8 @@ describe('team protocol end to end', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${workerScript}"`],
+            command: process.execPath,
+            args: [workerScript],
           }),
         }
       )
@@ -163,7 +164,9 @@ describe('team protocol end to end', () => {
         )
         const body = (await workerRunResponse.json()) as { output: string }
         expect(body.output).toContain(`dispatch_id: ${sendBody.dispatch_id}`)
-        expect(body.output).toContain(`team report "<result>" --dispatch ${sendBody.dispatch_id}`)
+        expect(body.output).toContain(
+          `team report --dispatch ${sendBody.dispatch_id} --seen <required_seen_seq> --stdin`
+        )
       })
 
       const activeDispatchesResponse = await fetch(
@@ -394,5 +397,5 @@ describe('team protocol end to end', () => {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 25_000)
 })

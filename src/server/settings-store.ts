@@ -1,5 +1,3 @@
-import type { Database } from 'better-sqlite3'
-
 import { type AppStateRecord, type AppStateValue, createAppStateStore } from './app-state-store.js'
 import {
   type CommandPresetInput,
@@ -11,12 +9,16 @@ import {
   type RoleTemplateInput,
   type RoleTemplateRecord,
 } from './role-template-store.js'
+import type { Database } from './sqlite.js'
 
 export interface SettingsStore {
   createCommandPreset: (input: CommandPresetInput) => CommandPresetRecord
   createRoleTemplate: (input: RoleTemplateInput) => RoleTemplateRecord
   deleteCommandPreset: (id: string) => void
   deleteRoleTemplate: (id: string) => void
+  /** TIER 2 #4 — workflow runner uses this to resolve a non-built-in
+   *  agentType against the user's curated role library. */
+  findRoleTemplateByName: (name: string) => RoleTemplateRecord | undefined
   getAppState: (key: string) => AppStateRecord | undefined
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
   listCommandPresets: () => CommandPresetRecord[]
@@ -45,6 +47,7 @@ export const createSettingsStore = (db: Database): SettingsStore => {
     createRoleTemplate: roleTemplateStore.create,
     deleteCommandPreset: commandPresetStore.remove,
     deleteRoleTemplate: roleTemplateStore.remove,
+    findRoleTemplateByName: roleTemplateStore.findByName,
     getAppState: appStateStore.get,
     getCommandPreset: commandPresetStore.get,
     listCommandPresets: commandPresetStore.list,

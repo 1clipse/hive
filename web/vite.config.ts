@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
+import { DEFAULT_HIVE_PORT } from '../src/cli/hive-defaults.js'
 import { buildSw } from './src/pwa/build-sw.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -12,7 +13,7 @@ const packageJson = JSON.parse(readFileSync(resolve(here, '..', 'package.json'),
   version: string
 }
 
-const runtimePort = Number.parseInt(process.env.HIVE_RUNTIME_PORT ?? '4010', 10)
+const runtimePort = Number.parseInt(process.env.HIVE_RUNTIME_PORT ?? String(DEFAULT_HIVE_PORT), 10)
 const webPort = Number.parseInt(process.env.HIVE_WEB_PORT ?? '5180', 10)
 
 export default defineConfig({

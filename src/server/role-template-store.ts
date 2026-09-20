@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto'
-
-import type { Database } from 'better-sqlite3'
-
 import { ConflictError } from './http-errors.js'
+import type { Database } from './sqlite.js'
 
 export type RoleTemplateType = 'orchestrator' | 'coder' | 'reviewer' | 'tester' | 'custom'
 
@@ -78,6 +76,16 @@ export const createRoleTemplateStore = (db: Database) => {
       .map((row) => toRecord(row as Parameters<typeof toRecord>[0]))
   }
 
+  /* TIER 2 #4 — case-insensitive lookup by template name. The workflow
+     runner uses this to resolve `agent('...', { agentType: 'security-reviewer' })`
+     against the workspace's custom role library so workflows can target
+     curated roles instead of always re-rolling fresh claude defaults. */
+  const findByName = (name: string): RoleTemplateRecord | undefined => {
+    const needle = name.trim().toLowerCase()
+    if (!needle) return undefined
+    return list().find((template) => template.name.trim().toLowerCase() === needle)
+  }
+
   const create = (input: RoleTemplateInput) => {
     const record = { id: randomUUID(), ...input, isBuiltin: false }
     const now = Date.now()
@@ -128,5 +136,5 @@ export const createRoleTemplateStore = (db: Database) => {
     db.prepare('DELETE FROM role_templates WHERE id = ?').run(id)
   }
 
-  return { create, list, remove, update }
+  return { create, list, remove, update, findByName }
 }

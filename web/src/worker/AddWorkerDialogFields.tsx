@@ -298,7 +298,7 @@ export const RoleInstructionsField = ({
   workerRole: WorkerRole
   writeDisabledReason?: string
 }) => {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const [instructionsOpen, setInstructionsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [templateName, setTemplateName] = useState('')
@@ -312,27 +312,38 @@ export const RoleInstructionsField = ({
     }
   }, [canSaveAsTemplate])
 
+  const expandLabel = language === 'zh' ? '点击展开' : 'Click to expand'
+
   return (
     <details
       open={instructionsOpen}
       onToggle={(event) => setInstructionsOpen((event.currentTarget as HTMLDetailsElement).open)}
       className="group flex flex-col gap-2"
     >
-      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-        <span className="flex items-center gap-1.5">
-          <ChevronDown
-            size={12}
-            aria-hidden
-            className="-rotate-90 text-ter transition-transform duration-150 group-open:rotate-0"
-          />
-          <SectionLabel>{t('addWorker.roleInstructions')}</SectionLabel>
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none rounded-lg p-2 -mx-2 hover:bg-3/50 transition-colors group/summary">
+        <span className="flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-3 border border-bright/30 text-ter transition-colors group-hover/summary:text-pri group-hover/summary:border-accent/40">
+            <ChevronDown
+              size={12}
+              aria-hidden
+              className="-rotate-90 transition-transform duration-150 group-open:rotate-0"
+            />
+          </span>
+          <span className="text-sm font-semibold text-pri transition-colors group-hover/summary:text-accent">
+            {t('addWorker.roleInstructions')}
+          </span>
           {modified ? (
-            <span className="text-sm text-ter">
+            <span className="text-xs text-ter">
               · {t('addWorker.modifiedFrom', { role: t(roleLabelKey(workerRole)) })}
             </span>
           ) : null}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {!instructionsOpen ? (
+            <span className="text-[10px] text-ter font-semibold tracking-wider uppercase opacity-60 group-hover/summary:opacity-100 group-hover/summary:text-accent transition-all pr-1">
+              {expandLabel}
+            </span>
+          ) : null}
           {canSaveAsTemplate && !saving ? (
             <button
               type="button"
@@ -510,22 +521,6 @@ export const AgentCliPicker = ({
   commandPresetId: string
   commandPresets: CommandPreset[]
   onPresetChange: (value: string) => void
-}) => (
-  <AgentCliPickerInner
-    commandPresetId={commandPresetId}
-    commandPresets={commandPresets}
-    onPresetChange={onPresetChange}
-  />
-)
-
-const AgentCliPickerInner = ({
-  commandPresetId,
-  commandPresets,
-  onPresetChange,
-}: {
-  commandPresetId: string
-  commandPresets: CommandPreset[]
-  onPresetChange: (value: string) => void
 }) => {
   const { t } = useI18n()
   return (
@@ -534,7 +529,7 @@ const AgentCliPickerInner = ({
       {commandPresets.length === 0 ? (
         <div className="text-sm text-ter">{t('addWorker.loadingPresets')}</div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
           {commandPresets.map((preset) => (
             <PresetAgentChip
               key={preset.id}
@@ -563,22 +558,37 @@ export const StartupCommandField = ({
   onChange: (value: string) => void
   value: string
 }) => {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
+  const [open, setOpen] = useState(false)
   const clean = value.trim()
+  const expandLabel = language === 'zh' ? '点击展开' : 'Click to expand'
+
   return (
-    <details className="group flex flex-col gap-2">
-      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <ChevronDown
-            size={12}
-            aria-hidden
-            className="-rotate-90 shrink-0 text-ter transition-transform duration-150 group-open:rotate-0"
-          />
-          <SectionLabel>{t('addWorker.startupCommand')}</SectionLabel>
+    <details
+      onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
+      className="group flex flex-col gap-2"
+    >
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none rounded-lg p-2 -mx-2 hover:bg-3/50 transition-colors group/summary">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-3 border border-bright/30 text-ter transition-colors group-hover/summary:text-pri group-hover/summary:border-accent/40">
+            <ChevronDown
+              size={12}
+              aria-hidden
+              className="-rotate-90 transition-transform duration-150 group-open:rotate-0"
+            />
+          </span>
+          <span className="text-sm font-semibold text-pri transition-colors group-hover/summary:text-accent">
+            {t('addWorker.startupCommand')}
+          </span>
           {clean ? (
-            <span className="truncate text-sm text-ter">· {t('addWorker.startupOverrides')}</span>
+            <span className="truncate text-xs text-ter">· {t('addWorker.startupOverrides')}</span>
           ) : null}
         </span>
+        {!open ? (
+          <span className="text-[10px] text-ter font-semibold tracking-wider uppercase opacity-60 group-hover/summary:opacity-100 group-hover/summary:text-accent transition-all pr-1">
+            {expandLabel}
+          </span>
+        ) : null}
       </summary>
       <div
         className="flex flex-col gap-2 rounded border bg-2 p-3"

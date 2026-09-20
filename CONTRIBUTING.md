@@ -1,7 +1,7 @@
 # Contributing to Hive
 
-Hive is in alpha public preview. Bug reports, design discussions, and PRs
-that fit the current project scope are very welcome.
+Development, issues, pull requests, and releases are maintained in `tt-a1i/hive`.
+The default branch includes unreleased work; use npm for the latest release.
 
 ## Before you file something
 
@@ -16,24 +16,30 @@ that fit the current project scope are very welcome.
 ## Development setup
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
 Dev mode runs the runtime on `127.0.0.1:4010` and Vite on `127.0.0.1:5180`.
 See the **Development** section of [README.md](./README.md) for a
-production-style local run. Node.js 22 or newer is required.
+production-style local run. Node.js `^22.18.0 || >=24.0.0` is required (see `package.json`).
 
 ## Before you open a PR
 
 ```bash
 pnpm check    # Biome lint + format
 pnpm build    # TypeScript build + Vite web build
-pnpm test     # Vitest (unit + integration)
 ```
 
-CI runs the same three checks on macOS, Ubuntu, and Windows for every push
-to `main` and every PR.
+Run tests for the affected core behavior. Follow the risk gates in [AGENTS.md](AGENTS.md):
+UI-only changes use static checks and browser/device verification; shared runtime,
+protocol, schema, security, or packaging changes require the corresponding integration
+checks and, for broad changes, the full suite. CI selects checks by changed paths;
+the nightly/manual workflow runs the extended platform matrix.
+
+Gateway changes also need `pnpm -C gateway exec tsc --noEmit` and
+`pnpm -C gateway test` after installing its dependencies. See
+[the deployment runbook](docs/deploy-runbook.md) for self-hosting.
 
 ## PR style
 
@@ -66,4 +72,4 @@ calling out:
 ## License
 
 By contributing you agree your contributions will be licensed under the
-project's current [Business Source License 1.1](./LICENSE.BSL) license.
+project's [Business Source License 1.1](./LICENSE.BSL), as described in [LICENSE](./LICENSE).

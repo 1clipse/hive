@@ -1,10 +1,61 @@
 import type { AgentSummary } from '../shared/types.js'
 import { ForbiddenError, UnauthorizedError } from './http-errors.js'
 
-export type TeamCommand = 'send' | 'list' | 'report' | 'status' | 'cancel' | 'help'
+export type TeamCommand =
+  | 'message'
+  | 'messages'
+  | 'send'
+  | 'list'
+  | 'next'
+  | 'report'
+  | 'recall'
+  | 'memory_add'
+  | 'memory_apply'
+  | 'memory_dream_show'
+  | 'memory_forget'
+  | 'memory_search'
+  | 'memory_show'
+  | 'status'
+  | 'cancel'
+  | 'help'
+  | 'spawn'
+  | 'review'
+  | 'dismiss'
+  | 'workflow'
+  | 'goal_report'
 
-const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>(['send', 'list', 'cancel', 'help'])
-const WORKER_COMMANDS = new Set<TeamCommand>(['report', 'status', 'help'])
+const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>([
+  'message',
+  'messages',
+  'send',
+  'list',
+  'next',
+  'cancel',
+  'help',
+  'recall',
+  'memory_add',
+  'memory_apply',
+  'memory_dream_show',
+  'memory_forget',
+  'memory_search',
+  'memory_show',
+  'spawn',
+  'review',
+  'dismiss',
+  'workflow',
+  'goal_report',
+])
+const WORKER_COMMANDS = new Set<TeamCommand>([
+  'message',
+  'messages',
+  'report',
+  'status',
+  'help',
+  'recall',
+  'memory_dream_show',
+  'memory_search',
+  'memory_show',
+])
 const WORKER_ROLES = new Set<AgentSummary['role']>(['coder', 'reviewer', 'tester', 'custom'])
 
 export const commandAllowedForRole = (role: AgentSummary['role'], command: TeamCommand) => {

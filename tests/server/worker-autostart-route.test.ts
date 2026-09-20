@@ -1,9 +1,9 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
-
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -21,7 +21,7 @@ afterEach(async () => {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
   }
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 const makeWorkspacePath = () => {
@@ -50,8 +50,8 @@ const createCommandPreset = async (baseUrl: string, cookie: string) => {
     headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({
       display_name: 'Sleeper',
-      command: 'bash',
-      args: ['-c', 'echo worker up; sleep 60'],
+      command: process.execPath,
+      args: ['-e', "console.log('worker up'); setInterval(() => {}, 1000)"],
       env: {},
       resume_args_template: null,
       session_id_capture: null,
@@ -81,6 +81,28 @@ const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25)
     }
   }
   throw lastError
+}
+
+const writeWindowsCommandShim = (
+  binDir: string,
+  name: string,
+  commandFile: string,
+  readyText?: string
+) => {
+  const scriptPath = join(binDir, `${name}-shim.mjs`)
+  writeFileSync(
+    scriptPath,
+    [
+      "import { writeFileSync } from 'node:fs'",
+      `writeFileSync(${JSON.stringify(commandFile)}, ${JSON.stringify(name)} + ' ' + process.argv.slice(2).join(' ') + '\\n')`,
+      ...(readyText ? [`console.log(${JSON.stringify(readyText)})`] : []),
+      'setInterval(() => {}, 1000)',
+    ].join('\n')
+  )
+  writeFileSync(
+    join(binDir, `${name}.cmd`),
+    `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
+  )
 }
 
 describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
@@ -117,8 +139,8 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
     const config = server.store.peekAgentLaunchConfig(workspace.id, body.id)
     expect(config).toEqual(
       expect.objectContaining({
-        args: ['-c', 'echo worker up; sleep 60'],
-        command: 'bash',
+        args: ['-e', "console.log('worker up'); setInterval(() => {}, 1000)"],
+        command: process.execPath,
         commandPresetId: preset.id,
       })
     )
@@ -149,6 +171,11 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
     )
     chmodSync(fakeShell, 0o755)
     setEnv('SHELL', fakeShell)
+    const startupCommand = 'custom-aicli --model demo'
+    if (process.platform === 'win32') {
+      writeWindowsCommandShim(binDir, 'custom-aicli', shellCommandFile, 'worker custom shell ready')
+      setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+    }
 
     const server = await startTestServer({ dataDir })
     servers.push(server)
@@ -160,9 +187,9 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
       headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({
         autostart: true,
-        name: 'QwenWorker',
+        name: 'CustomWorker',
         role: 'coder',
-        startup_command: 'qwen --model qwen3-coder',
+        startup_command: startupCommand,
       }),
     })
 
@@ -173,16 +200,25 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
     }
     expect(body.agent_start).toMatchObject({ error: null, ok: true })
     expect(typeof body.agent_start.run_id).toBe('string')
+    const expectedConfig =
+      process.platform === 'win32'
+        ? {
+            args: ['/d', '/s', '/c', startupCommand],
+            command: process.env.ComSpec ?? 'cmd.exe',
+          }
+        : {
+            args: ['-lic', startupCommand],
+            command: fakeShell,
+          }
     expect(server.store.peekAgentLaunchConfig(workspace.id, body.id)).toMatchObject({
-      args: ['-lic', 'qwen --model qwen3-coder'],
-      command: fakeShell,
+      ...expectedConfig,
       commandPresetId: null,
-      interactiveCommand: 'qwen',
+      interactiveCommand: 'custom-aicli',
       presetAugmentationDisabled: true,
       sessionIdCapture: null,
     })
     await waitFor(() => {
-      expect(readFileSync(shellCommandFile, 'utf8')).toBe('qwen --model qwen3-coder\n')
+      expect(readFileSync(shellCommandFile, 'utf8')).toBe(`${startupCommand}\n`)
     })
     await waitFor(() => {
       expect(server.store.getLiveRun(body.agent_start.run_id ?? '').output).toContain(
@@ -211,6 +247,10 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
     )
     chmodSync(fakeShell, 0o755)
     setEnv('SHELL', fakeShell)
+    if (process.platform === 'win32') {
+      writeWindowsCommandShim(binDir, 'opencode', shellCommandFile)
+      setEnv('PATH', `${binDir}${delimiter}${process.env.PATH ?? ''}`)
+    }
 
     const server = await startTestServer({ dataDir })
     servers.push(server)
@@ -235,8 +275,17 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
       id: string
     }
     expect(body.agent_start).toMatchObject({ error: null, ok: true })
+    const expectedConfig =
+      process.platform === 'win32'
+        ? {
+            args: ['/d', '/s', '/c', 'opencode --continue'],
+            command: process.env.ComSpec ?? 'cmd.exe',
+          }
+        : {
+            command: fakeShell,
+          }
     expect(server.store.peekAgentLaunchConfig(workspace.id, body.id)).toMatchObject({
-      command: fakeShell,
+      ...expectedConfig,
       commandPresetId: null,
       interactiveCommand: 'opencode',
       presetAugmentationDisabled: true,
@@ -292,7 +341,10 @@ describe('POST /api/workspaces/:workspaceId/workers autostart', () => {
       id: string
     }
     expect(body.agent_start).toMatchObject({
-      error: 'definitely-missing-hive-agent CLI not found in PATH',
+      error:
+        process.platform === 'win32'
+          ? 'definitely-missing-hive-agent failed to start (exit 1)'
+          : 'definitely-missing-hive-agent CLI not found in PATH',
       ok: false,
     })
     expect(body.agent_start.error).not.toContain('/bin/sh')

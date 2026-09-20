@@ -1,6 +1,13 @@
 node_modules/
 dist/
 coverage/
+artifacts/
+
+# Cloudflare gateway local secrets + build artifacts — never commit
+.dev.vars
+gateway/.dev.vars
+gateway/.wrangler/
+gateway/worker-configuration.d.ts
 *.log
 .DS_Store
 .env
@@ -8,3 +15,10 @@ coverage/
 .harnessed/
 .screenshots-prod/
 ~/.hive/
+
+# Local agent sessions and credentials
+.hive/
+.claude/
+.hermes/
+.env.*
+!.env.example

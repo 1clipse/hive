@@ -5,6 +5,7 @@ import { mergeTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 
 type WorkspaceTerminalPanelsProps = {
   hidden?: boolean
+  onTerminalRunExited?: (workspaceId: string, runId: string) => void
   optimisticRuns?: TerminalRunSummary[]
   terminalRuns: TerminalRunSummary[]
   workspaceId: string
@@ -12,6 +13,7 @@ type WorkspaceTerminalPanelsProps = {
 
 export const WorkspaceTerminalPanels = ({
   hidden = false,
+  onTerminalRunExited,
   optimisticRuns = [],
   terminalRuns,
   workspaceId,
@@ -29,7 +31,9 @@ export const WorkspaceTerminalPanels = ({
         <TerminalView
           inputProfile={run.terminal_input_profile ?? 'default'}
           key={run.run_id}
+          onRunExited={(runId) => onTerminalRunExited?.(workspaceId, runId)}
           runId={run.run_id}
+          startupBlockedReason={run.startup_blocked_reason ?? null}
           title={`${run.agent_name} (${run.status})`}
         />
       ))}

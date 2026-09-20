@@ -7,7 +7,8 @@ interface AutostartPort {
     agentId: string,
     input: { hivePort: string }
   ) => Promise<{ runId: string; status: string; exitCode: number | null }>
-  getLiveRun: (runId: string) => { status: string; exitCode: number | null }
+  getLiveRun: (runId: string) => { status: string; exitCode: number | null; output?: string }
+  waitForRunExit?: (runId: string, timeoutMs: number) => Promise<boolean>
   peekAgentLaunchConfig: (
     workspaceId: string,
     agentId: string
@@ -16,16 +17,24 @@ interface AutostartPort {
 
 // SETTLE_WAIT_MS: how long we wait before declaring autostart "ok". Must be
 // long enough to observe an early exit when the child shell prints
-// "command not found" then dies with exit 127 (typically <100ms in practice).
-// 800ms balances reliability vs the perceived workspace-create latency cost.
-const SETTLE_WAIT_MS = 800
+// "command not found" then dies with exit 127 (POSIX) or 9009 (Windows)
+// - typically <100ms in practice. 800ms balances reliability vs the perceived
+// workspace-create latency cost. Production runtime exposes an exit promise so
+// we don't miss the event between polling ticks; stubs fall back to polling.
+const SETTLE_WAIT_MS = process.platform === 'win32' ? 2000 : 800
+// node-pty's spawn helper can take several seconds to finish executing a
+// shebang script that exits immediately. Only use this longer window while the
+// PTY is still completely silent and "starting"; real CLIs that print output
+// keep the normal fast path above.
+const SILENT_STARTING_SETTLE_WAIT_MS = process.platform === 'win32' ? 5000 : 4000
 const POLL_INTERVAL_MS = 25
 
-// Shells emit exit code 127 when the requested command is not on PATH (POSIX).
-// node-pty does NOT raise a synchronous spawn error for that case — the PTY
-// just dies almost immediately via onExit. We translate that to the same UX
-// string as the sync-ENOENT path so the user gets one consistent message.
-const COMMAND_NOT_FOUND_EXIT_CODE = 127
+// Shells emit a "command not found" exit code when the requested binary is
+// missing on PATH. node-pty does NOT raise a synchronous spawn error for that
+// case — the PTY just dies almost immediately via onExit. We translate that to
+// the same UX string as the sync-ENOENT path so the user gets one consistent
+// message. POSIX shells use 127; Windows cmd.exe uses 9009.
+const COMMAND_NOT_FOUND_EXIT_CODES: ReadonlySet<number> = new Set([127, 9009])
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -54,15 +63,15 @@ const formatStartError = (error: unknown, command: string | undefined): string =
  * Translate an early-exit terminal state to a human-friendly error string.
  *
  * Two cases land here:
- *   - exit 127: shell saying "command not found" (the most common real case
- *     when the configured CLI is missing — node-pty does NOT throw sync ENOENT
- *     for missing binaries, it spawns successfully and the child dies via
- *     onExit).
+ *   - exit 127 (POSIX) / 9009 (Windows cmd.exe): shell saying "command not
+ *     found" — the most common real case when the configured CLI is missing,
+ *     because node-pty does NOT throw sync ENOENT for missing binaries; it
+ *     spawns successfully and the child dies via onExit.
  *   - any other non-zero exit: surface the raw code so we don't lie about the
  *     cause.
  */
-const formatEarlyExitError = (command: string, exitCode: number | null): string => {
-  if (exitCode === COMMAND_NOT_FOUND_EXIT_CODE) {
+export const formatEarlyExitError = (command: string, exitCode: number | null): string => {
+  if (exitCode !== null && COMMAND_NOT_FOUND_EXIT_CODES.has(exitCode)) {
     return `${command} CLI not found in PATH`
   }
   return `${command} failed to start (exit ${exitCode ?? 'null'})`
@@ -112,24 +121,38 @@ export const autostartAgent = async (
   try {
     const run = await port.startAgent(workspaceId, agentId, { hivePort })
     // node-pty often doesn't throw on missing binaries — it spawns then exits
-    // fast via onExit with a non-zero code. Poll briefly so we surface the
-    // failure synchronously in the response instead of returning a fake "ok".
-    //
-    // Loop condition is "until we hit a terminal state OR deadline". Earlier
-    // versions exited as soon as `status === 'running'`, which missed the case
-    // where bash prints `command not found` (status flips to running) and then
-    // exits 127 a few ms later. The tighter loop catches that path.
+    // fast via onExit with a non-zero code. Wait briefly for that real exit
+    // event so we surface the failure synchronously instead of returning a fake
+    // "ok". Older test ports without waitForRunExit use the polling fallback.
     let exitCode: number | null = run.exitCode
     let status: string = run.status
-    const deadline = Date.now() + SETTLE_WAIT_MS
+    let output = ''
+    const startedAt = Date.now()
+    let deadline = startedAt + SETTLE_WAIT_MS
+    const silentStartingDeadline = startedAt + SILENT_STARTING_SETTLE_WAIT_MS
     while (status !== 'exited' && status !== 'error' && Date.now() < deadline) {
-      await sleep(POLL_INTERVAL_MS)
+      const remainingMs = Math.max(0, deadline - Date.now())
+      const waitMs = Math.min(POLL_INTERVAL_MS, remainingMs)
+      if (port.waitForRunExit) {
+        await port.waitForRunExit(run.runId, waitMs)
+      } else {
+        await sleep(waitMs)
+      }
       try {
         const live = port.getLiveRun(run.runId)
         status = live.status
         exitCode = live.exitCode
+        output = live.output ?? output
       } catch {
         break
+      }
+      if (
+        status === 'starting' &&
+        output.length === 0 &&
+        deadline < silentStartingDeadline &&
+        Date.now() >= deadline
+      ) {
+        deadline = silentStartingDeadline
       }
     }
     if (status === 'error' || (status === 'exited' && (exitCode ?? 0) !== 0)) {

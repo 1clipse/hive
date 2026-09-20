@@ -10,17 +10,17 @@ const readPathParam = (request: { url?: string | undefined }): string => {
 
 export const fsRoutes: RouteDefinition[] = [
   route('GET', '/api/fs/browse', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const body = await browseDirectory(readPathParam(request))
     sendJson(response, body.ok ? 200 : 400, body)
   }),
   route('GET', '/api/fs/probe', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const body = await probeDirectory(readPathParam(request))
     sendJson(response, 200, body)
   }),
   route('POST', '/api/fs/pick-folder', async ({ pickFolderService, request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const body = await pickFolderService()
     sendJson(response, 200, body)
   }),

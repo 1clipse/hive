@@ -70,6 +70,8 @@ const inferStatusTone = (value: string): PillTone => {
 
 const looksLikePath = (value: string): boolean => {
   if (value.includes('/')) return true
+  if (/^[A-Za-z]:\\/.test(value)) return true
+  if ((value.match(/\\/g)?.length ?? 0) >= 2) return true
   // bare-extension form: `notes.md`, `report.txt`
   return /^[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(value)
 }

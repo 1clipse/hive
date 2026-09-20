@@ -3,21 +3,20 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { captureSessionIdWithCoordinator } from './claude-session-coordinator.js'
+import { arePathsEqual, expandHomePath, indexOfPathMarker } from './platform-path.js'
 
 const GEMINI_SESSION_FILE = /^session-.*\.json$/i
+const GEMINI_TMP_MARKER = '/tmp/'
 
 const getDefaultGeminiHome = () => process.env.HIVE_GEMINI_HOME ?? join(homedir(), '.gemini')
 
-const expandHome = (path: string) =>
-  path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
-
-export const getGeminiHome = (pattern?: string) => {
+export const getGeminiHome = (pattern?: string, platform: NodeJS.Platform = process.platform) => {
   if (!pattern) return getDefaultGeminiHome()
-  const markerIndex = pattern.indexOf('/tmp/')
+  const markerIndex = indexOfPathMarker(pattern, GEMINI_TMP_MARKER, platform)
   if (markerIndex === -1) return getDefaultGeminiHome()
-  const rawRoot = pattern.slice(0, markerIndex)
-  if (rawRoot === '~/.gemini' || rawRoot === '~/.gemini/') return getDefaultGeminiHome()
-  const root = expandHome(rawRoot)
+  const rawRoot = pattern.slice(0, markerIndex).replace(/[\\/]+$/u, '')
+  const root = expandHomePath(rawRoot)
+  if (arePathsEqual(root, join(homedir(), '.gemini'), platform)) return getDefaultGeminiHome()
   return root || getDefaultGeminiHome()
 }
 
@@ -42,7 +41,8 @@ const listSessionIds = (cwd: string, geminiHome = getDefaultGeminiHome()) => {
       .filter((entry) => entry.isDirectory())
       .flatMap((entry) => {
         const projectDir = join(tmpRoot, entry.name)
-        if (readProjectRoot(projectDir) !== cwd) return []
+        const projectRoot = readProjectRoot(projectDir)
+        if (projectRoot === null || !arePathsEqual(projectRoot, cwd)) return []
         const chatsDir = join(projectDir, 'chats')
         try {
           return readdirSync(chatsDir, { withFileTypes: true }).flatMap((chat) => {

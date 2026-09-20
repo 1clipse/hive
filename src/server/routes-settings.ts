@@ -1,8 +1,24 @@
-import { resolveCommandPath } from './agent-command-resolver.js'
+import { isCommandAvailableOnPath } from './agent-command-resolver.js'
+import { readFeatureFlags } from './feature-flags.js'
+import { BadRequestError, ForbiddenError } from './http-errors.js'
+import { isRemoteConfigKey, REMOTE_ENABLED_KEY } from './remote-config-keys.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
-import type { RouteDefinition } from './route-types.js'
+import type { RouteContext, RouteDefinition } from './route-types.js'
 import type { SessionIdCaptureConfig } from './session-capture.js'
+import { ensureProtocolFile } from './tasks-file.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
+import {
+  assertValidWorkflowCliPolicy,
+  CANONICAL_WORKFLOW_CLIS,
+  readWorkflowCliPolicy,
+  WORKFLOW_CLI_POLICY_KEY,
+  type WorkflowCliPolicy,
+} from './workflow-cli-policy.js'
+import {
+  readWorkflowEnabled,
+  serializeWorkflowEnabled,
+  WORKFLOW_ENABLED_KEY,
+} from './workflow-feature.js'
 
 type CommandPresetBody = {
   display_name: string
@@ -23,6 +39,8 @@ type RoleTemplateBody = {
   default_env: Record<string, string>
 }
 
+const ROLE_TEMPLATE_TYPES = new Set(['orchestrator', 'coder', 'reviewer', 'tester', 'custom'])
+
 const serializeCommandPreset = (preset: {
   id: string
   displayName: string
@@ -34,15 +52,7 @@ const serializeCommandPreset = (preset: {
   yoloArgsTemplate: string[] | null
   isBuiltin: boolean
 }) => {
-  let available = false
-  try {
-    if (preset.command.trim()) {
-      resolveCommandPath(preset.command, process.cwd(), { ...process.env, ...preset.env })
-      available = true
-    }
-  } catch {
-    available = false
-  }
+  const available = isCommandAvailableOnPath(preset.command, preset.env)
 
   return {
     id: preset.id,
@@ -78,6 +88,30 @@ const serializeRoleTemplate = (template: {
   is_builtin: template.isBuiltin,
 })
 
+/**
+ * Rewrite every open workspace's `.hive/PROTOCOL.md` to match the just-saved
+ * workflow feature flag + CLI policy. Without this the doc only refreshes on
+ * the next workspace open / watcher start, so toggling the feature would leave
+ * stale guidance (workflow DSL still present after disabling, or absent right
+ * after enabling). Idempotent: ensureProtocolFile only rewrites on change.
+ */
+const refreshWorkflowProtocolDocs = (store: {
+  settings: { getAppState: (key: string) => { value: string | null } | undefined }
+  listWorkspaces: () => Array<{ path: string }>
+}) => {
+  const policy = readWorkflowCliPolicy(
+    store.settings.getAppState(WORKFLOW_CLI_POLICY_KEY)?.value ?? null
+  )
+  const flags = readFeatureFlags(store.settings)
+  for (const workspace of store.listWorkspaces()) {
+    try {
+      ensureProtocolFile(workspace.path, policy, flags)
+    } catch (error) {
+      console.error('[hive] swallowed:settings.refreshProtocol', error)
+    }
+  }
+}
+
 const readCommandPresetBody = async (
   request: Parameters<RouteDefinition['handler']>[0]['request']
 ) => {
@@ -97,9 +131,13 @@ const readRoleTemplateBody = async (
   request: Parameters<RouteDefinition['handler']>[0]['request']
 ) => {
   const body = await readJsonBody<Partial<RoleTemplateBody>>(request)
+  const roleType = body.role_type ?? 'custom'
+  if (!ROLE_TEMPLATE_TYPES.has(roleType)) {
+    throw new BadRequestError('Invalid role_type')
+  }
   return {
     name: body.name ?? '',
-    roleType: body.role_type ?? 'custom',
+    roleType,
     description: body.description ?? '',
     defaultCommand: body.default_command ?? '',
     defaultArgs: body.default_args ?? [],
@@ -107,13 +145,30 @@ const readRoleTemplateBody = async (
   }
 }
 
+// Remote-config KV keys (remote-config-keys.ts) are a different trust domain from
+// equal-authority daemon API. Tunnel-origin requests must not read or write them
+// (token leak + Remote-ON persist). remote_enabled writes are rejected from every
+// origin so the only arming path is PUT /api/remote/enabled.
+const assertAppStateKeyAllowed = (
+  ctx: Pick<RouteContext, 'request' | 'store'>,
+  key: string,
+  write: boolean
+): void => {
+  if (write && key === REMOTE_ENABLED_KEY) {
+    throw new ForbiddenError('remote_enabled can only be changed via /api/remote/enabled')
+  }
+  if (isRemoteConfigKey(key) && ctx.store.authorizeRemoteTunnelRequest(ctx.request)) {
+    throw new ForbiddenError('remote configuration is not available over the tunnel')
+  }
+}
+
 export const settingsRoutes: RouteDefinition[] = [
   route('GET', '/api/settings/command-presets', ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     sendJson(response, 200, store.settings.listCommandPresets().map(serializeCommandPreset))
   }),
   route('POST', '/api/settings/command-presets', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     sendJson(
       response,
       201,
@@ -126,7 +181,7 @@ export const settingsRoutes: RouteDefinition[] = [
     'PATCH',
     '/api/settings/command-presets/:presetId',
     async ({ params, request, response, store }) => {
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       const presetId = getRequiredParam(response, params, 'presetId', 'Preset id is required')
       if (!presetId) return
       const current = store.settings.listCommandPresets().find((preset) => preset.id === presetId)
@@ -143,7 +198,7 @@ export const settingsRoutes: RouteDefinition[] = [
     'DELETE',
     '/api/settings/command-presets/:presetId',
     ({ params, request, response, store }) => {
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       const presetId = getRequiredParam(response, params, 'presetId', 'Preset id is required')
       if (!presetId) return
       store.settings.deleteCommandPreset(presetId)
@@ -152,11 +207,11 @@ export const settingsRoutes: RouteDefinition[] = [
     }
   ),
   route('GET', '/api/settings/role-templates', ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     sendJson(response, 200, store.settings.listRoleTemplates().map(serializeRoleTemplate))
   }),
   route('POST', '/api/settings/role-templates', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     sendJson(
       response,
       201,
@@ -167,7 +222,7 @@ export const settingsRoutes: RouteDefinition[] = [
     'PATCH',
     '/api/settings/role-templates/:templateId',
     async ({ params, request, response, store }) => {
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       const templateId = getRequiredParam(response, params, 'templateId', 'Template id is required')
       if (!templateId) return
       const current = store.settings
@@ -186,7 +241,7 @@ export const settingsRoutes: RouteDefinition[] = [
     'DELETE',
     '/api/settings/role-templates/:templateId',
     ({ params, request, response, store }) => {
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       const templateId = getRequiredParam(response, params, 'templateId', 'Template id is required')
       if (!templateId) return
       store.settings.deleteRoleTemplate(templateId)
@@ -194,19 +249,62 @@ export const settingsRoutes: RouteDefinition[] = [
       response.end()
     }
   ),
-  route('GET', '/api/settings/app-state/:key', ({ params, request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+  route('GET', '/api/settings/app-state/:key', (ctx) => {
+    const { params, request, response, store } = ctx
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const key = getRequiredParam(response, params, 'key', 'App state key is required')
     if (!key) return
+    assertAppStateKeyAllowed(ctx, key, false)
     sendJson(response, 200, store.settings.getAppState(key) ?? { key, value: null })
   }),
-  route('PUT', '/api/settings/app-state/:key', async ({ params, request, response, store }) => {
-    requireUiTokenFromRequest(request, store.validateUiToken)
+  route('PUT', '/api/settings/app-state/:key', async (ctx) => {
+    const { params, request, response, store } = ctx
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
     const key = getRequiredParam(response, params, 'key', 'App state key is required')
     if (!key) return
+    assertAppStateKeyAllowed(ctx, key, true)
     const body = await readJsonBody<{ value: string | null }>(request)
     store.settings.setAppState(key, body.value)
     response.statusCode = 204
     response.end()
+  }),
+  route('GET', '/api/settings/workflow-cli-policy', ({ request, response, store }) => {
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+    const policy = readWorkflowCliPolicy(
+      store.settings.getAppState(WORKFLOW_CLI_POLICY_KEY)?.value ?? null
+    )
+    sendJson(response, 200, { ...policy, supported: [...CANONICAL_WORKFLOW_CLIS] })
+  }),
+  route('PUT', '/api/settings/workflow-cli-policy', async ({ request, response, store }) => {
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+    const body = await readJsonBody<unknown>(request)
+    // Strict validation: a bad payload is rejected (400) rather than persisted.
+    const clean: WorkflowCliPolicy = ((): WorkflowCliPolicy => {
+      try {
+        return assertValidWorkflowCliPolicy(body)
+      } catch (error) {
+        throw new BadRequestError(error instanceof Error ? error.message : String(error))
+      }
+    })()
+    store.settings.setAppState(WORKFLOW_CLI_POLICY_KEY, JSON.stringify(clean))
+    refreshWorkflowProtocolDocs(store)
+    sendJson(response, 200, { ...clean, supported: [...CANONICAL_WORKFLOW_CLIS] })
+  }),
+  route('GET', '/api/settings/workflow-feature', ({ request, response, store }) => {
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+    const enabled = readWorkflowEnabled(
+      store.settings.getAppState(WORKFLOW_ENABLED_KEY)?.value ?? null
+    )
+    sendJson(response, 200, { enabled })
+  }),
+  route('PUT', '/api/settings/workflow-feature', async ({ request, response, store }) => {
+    requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+    const body = await readJsonBody<{ enabled?: unknown }>(request)
+    if (typeof body.enabled !== 'boolean') {
+      throw new BadRequestError('workflow-feature requires { enabled: boolean }')
+    }
+    store.settings.setAppState(WORKFLOW_ENABLED_KEY, serializeWorkflowEnabled(body.enabled))
+    refreshWorkflowProtocolDocs(store)
+    sendJson(response, 200, { enabled: body.enabled })
   }),
 ]

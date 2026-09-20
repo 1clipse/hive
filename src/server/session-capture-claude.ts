@@ -6,6 +6,7 @@ import {
   captureSessionIdWithCoordinator,
   resetSessionCaptureCoordinatorForTests,
 } from './claude-session-coordinator.js'
+import { arePathsEqual, expandHomePath } from './platform-path.js'
 
 const SESSION_FILE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.jsonl$/i
@@ -13,19 +14,47 @@ const SESSION_FILE =
 const getDefaultProjectsRoot = () =>
   process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude/projects')
 
-export const getClaudeProjectsRoot = (pattern?: string) => {
+export const getClaudeProjectsRoot = (
+  pattern?: string,
+  platform: NodeJS.Platform = process.platform
+) => {
   if (!pattern) return getDefaultProjectsRoot()
   const markerIndex = pattern.indexOf('{encoded_cwd}')
   if (markerIndex === -1) return getDefaultProjectsRoot()
   const root = pattern.slice(0, markerIndex).replace(/[\\/]+$/, '')
   if (!root) return getDefaultProjectsRoot()
-  if (root === '~' || root.startsWith('~/')) {
-    return process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
+  const builtInProjectsRoot = join(homedir(), '.claude', 'projects')
+  const expandedRoot = expandHomePath(root)
+  if (root === '~' || arePathsEqual(expandedRoot, builtInProjectsRoot, platform)) {
+    return getDefaultProjectsRoot()
   }
-  return root
+  return expandedRoot
 }
 
-export const encodeClaudeProjectPath = (cwd: string) => cwd.replace(/[\\/:\s]/g, '-')
+/**
+ * Match the directory-name encoding Claude Code itself uses for its project
+ * metadata under `~/.claude/projects/`. Empirically (probed via `claude
+ * --print "x"` in directories named with each character) Claude Code
+ * replaces *every* character outside `[A-Za-z0-9-]` with a single `-`,
+ * one-for-one, preserving literal hyphens.
+ *
+ * The previous regex `[\\/:\s]` only matched `\`, `/`, `:`, and whitespace —
+ * leaving `_`, `.`, parens, brackets, `@`, `#`, `&`, `+`, and any non-ASCII
+ * character (including CJK usernames) intact, while Claude Code's own
+ * encoder replaced them. The mismatch meant Hive looked for sessions under
+ * a different directory than the one Claude Code wrote to, so session
+ * resume silently failed for any workspace path containing those chars.
+ * Windows + CJK Windows usernames (`C:\Users\张三\project`) and
+ * underscored Windows project paths (`C:\my_project`) are the most common
+ * triggers, but the bug is cross-platform.
+ *
+ * Backward compatibility: workspaces whose path contains ONLY chars that
+ * the old regex already matched (`/\:` + whitespace) get the same encoded
+ * dirname as before — no behavior change. Workspaces with any other
+ * special chars previously had broken session resume; the fix moves them
+ * to the correct (working) directory.
+ */
+export const encodeClaudeProjectPath = (cwd: string) => cwd.replace(/[^A-Za-z0-9-]/g, '-')
 
 const listSessionIds = (cwd: string, projectsRoot = getDefaultProjectsRoot()) => {
   const projectDir = join(projectsRoot, encodeClaudeProjectPath(cwd))

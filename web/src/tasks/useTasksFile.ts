@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getWorkspaceTasks, saveWorkspaceTasks } from '../api.js'
+import { getApiTransport, getWorkspaceTasks, saveWorkspaceTasks } from '../api.js'
+import type { TransportSocket } from '../transport/api-transport.js'
 import {
   appendChildTaskAtLine,
+  appendTaskToContent,
   deleteTaskLine,
   toggleTaskLine,
   updateTaskTextAtLine,
 } from './task-markdown.js'
-
-const toTasksSocketUrl = (workspaceId: string) => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/tasks/${workspaceId}`
-}
 
 const shouldIgnoreRemoteUpdate = (
   nextContent: string,
@@ -93,17 +90,42 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
   useEffect(() => {
     if (!workspaceId) return
     let closed = false
-    const socket = new WebSocket(toTasksSocketUrl(workspaceId))
-    socket.onmessage = (event) => {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let attempt = 0
+    // Track the live socket so cleanup can close it even when the ref lives in openSocket's scope.
+    let activeSocket: TransportSocket | null = null
+
+    const openSocket = (): void => {
       if (closed) return
-      const payload = JSON.parse(event.data) as { content?: string; type: string }
-      if (payload.type !== 'tasks-snapshot' && payload.type !== 'tasks-updated') return
-      if (typeof payload.content !== 'string') return
-      applyRemoteContent(payload.content, contentRef.current)
+      const socket = getApiTransport().openWebSocket(`/ws/tasks/${workspaceId}`)
+      activeSocket = socket
+      socket.onmessage = (event) => {
+        if (closed) return
+        // The tasks channel is text-only (JSON snapshots); coerce since the transport socket's
+        // message type is the broader string | binary union.
+        const payload = JSON.parse(String(event.data)) as { content?: string; type: string }
+        if (payload.type !== 'tasks-snapshot' && payload.type !== 'tasks-updated') return
+        if (typeof payload.content !== 'string') return
+        attempt = 0
+        applyRemoteContent(payload.content, contentRef.current)
+      }
+      socket.onclose = () => {
+        if (closed) return
+        // Capped exponential backoff: 500ms, 1s, 2s, 4s … up to 30s.
+        attempt += 1
+        const delay = Math.min(30_000, 500 * 2 ** (attempt - 1))
+        retryTimer = setTimeout(openSocket, delay)
+      }
     }
+
+    openSocket()
     return () => {
       closed = true
-      socket.close()
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+      activeSocket?.close()
     }
   }, [applyRemoteContent, workspaceId])
 
@@ -209,8 +231,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       const trimmed = text.trim()
       if (!workspaceId || !trimmed) return
       const previous = contentRef.current
-      const needsLeadingNewline = previous.length > 0 && !previous.endsWith('\n')
-      const next = `${previous}${needsLeadingNewline ? '\n' : ''}- [ ] ${trimmed}\n`
+      const next = appendTaskToContent(previous, trimmed)
       savedContentRef.current = next
       contentRef.current = next
       dirtyRef.current = false

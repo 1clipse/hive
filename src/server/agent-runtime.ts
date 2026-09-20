@@ -14,8 +14,26 @@ import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { createAgentTokenRegistry } from './agent-tokens.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
+import type { FeatureFlags } from './feature-flags.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
 import { createNoopRestartPolicy, type RestartPolicy } from './restart-policy.js'
+import type { TeamMemoryInjectionService } from './team-memory-injection.js'
+
+const waitForExitEntry = async (promise: Promise<unknown>, timeoutMs: number): Promise<boolean> => {
+  if (timeoutMs <= 0) return false
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise.then(() => true),
+      new Promise<false>((resolve) => {
+        timeout = setTimeout(() => resolve(false), timeoutMs)
+        timeout.unref?.()
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
 
 export const createAgentRuntime = (
   agentManager: AgentManager | undefined,
@@ -24,7 +42,9 @@ export const createAgentRuntime = (
   getCommandPreset: (id: string) => CommandPresetRecord | undefined,
   onAgentExit: (workspaceId: string, agentId: string) => void,
   restartPolicy: RestartPolicy = createNoopRestartPolicy(),
-  getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined
+  getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined,
+  getFlags?: () => FeatureFlags,
+  memoryInjection?: TeamMemoryInjectionService
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
@@ -45,6 +65,8 @@ export const createAgentRuntime = (
     getWorkspaceId: launchCache.getWorkspaceId,
     registry,
     syncRun,
+    ...(getFlags ? { getFlags } : {}),
+    ...(memoryInjection ? { memoryInjection } : {}),
   })
   const startLiveRun = createAgentRunStarter({
     agentManager,
@@ -56,6 +78,8 @@ export const createAgentRuntime = (
     getCommandPreset,
     getAgent,
     restartPolicy,
+    ...(getFlags ? { getFlags } : {}),
+    ...(memoryInjection ? { memoryInjection } : {}),
   })
 
   return {
@@ -82,10 +106,19 @@ export const createAgentRuntime = (
         agentId
       )
     },
+    findLiveRun(runId) {
+      const run = registry.get(runId)
+      return run ? syncRun(run) : undefined
+    },
     getLiveRun(runId) {
       const run = registry.get(runId)
       if (!run) throw new Error(`Live run not found: ${runId}`)
       return syncRun(run)
+    },
+    waitForRunExit(runId, timeoutMs) {
+      const entry = registry.getExitEntry(runId)
+      if (!entry) return Promise.resolve(false)
+      return waitForExitEntry(entry.promise, timeoutMs)
     },
     getPtyOutputBus() {
       return flowAdapter.getOutputBus()
@@ -133,30 +166,51 @@ export const createAgentRuntime = (
       return startPromise
     },
     stopAgentRun(runId) {
-      stopLiveRun(agentManager, registry, syncRun, runId)
+      stopLiveRun(agentManager, registry, syncRun, runId, (stoppedRunId) => {
+        const liveRun = registry.get(stoppedRunId)
+        if (liveRun) liveRun.userStopped = true
+        restartPolicy.markUserStopped(stoppedRunId)
+      })
     },
     validateAgentToken: tokenRegistry.validate,
-    writeReportPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
-      stdinDispatcher.writeReportPrompt(workspaceId, workerName, text, artifacts, input)
-    },
     writeStatusPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
-      stdinDispatcher.writeStatusPrompt(workspaceId, workerName, text, artifacts, input)
+      return stdinDispatcher.writeStatusPrompt(workspaceId, workerName, text, artifacts, input)
     },
-    writeSendPrompt(workspaceId, workerId, dispatchId, fromAgentName, workerDescription, text) {
-      stdinDispatcher.writeSendPrompt(
+    writeSendPrompt(
+      workspaceId,
+      workerId,
+      dispatchId,
+      fromAgentName,
+      workerDescription,
+      text,
+      requiredSeenSeq,
+      input = {}
+    ) {
+      return stdinDispatcher.writeSendPrompt(
         workspaceId,
         workerId,
         dispatchId,
         fromAgentName,
         workerDescription,
-        text
+        text,
+        requiredSeenSeq,
+        input
       )
     },
     writeCancelPrompt(workspaceId, workerId, dispatchId, reason, input = {}) {
-      stdinDispatcher.writeCancelPrompt(workspaceId, workerId, dispatchId, reason, input)
+      return stdinDispatcher.writeCancelPrompt(workspaceId, workerId, dispatchId, reason, input)
     },
     writeUserInputPrompt(workspaceId, text) {
       stdinDispatcher.writeUserInputPrompt(workspaceId, text)
+    },
+    writeSystemMessageToAgent(workspaceId, agentId, text) {
+      stdinDispatcher.writeSystemMessageToAgent(workspaceId, agentId, text)
+    },
+    deliverUserInputToOrchestrator(workspaceId, text, input = {}) {
+      return stdinDispatcher.deliverUserInputToOrchestrator(workspaceId, text, input)
+    },
+    deliverSystemMessageToAgent(workspaceId, agentId, text, input = {}) {
+      return stdinDispatcher.deliverSystemMessageToAgent(workspaceId, agentId, text, input)
     },
   }
 }

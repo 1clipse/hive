@@ -8,30 +8,64 @@ import type {
   SendTaskBody,
   WorkerRole,
 } from './route-types.js'
+import { actionCenterRoutes } from './routes-action-center.js'
+import { controllerRoutes } from './routes-controller.js'
+import { diagnosticsRoutes } from './routes-diagnostics.js'
 import { dispatchRoutes } from './routes-dispatches.js'
+import { externalGoalRoutes } from './routes-external-goals.js'
 import { fsRoutes } from './routes-fs.js'
 import { marketplaceRoutes } from './routes-marketplace.js'
 import { openWorkspaceRoutes } from './routes-open-workspace.js'
+import { remoteRoutes } from './routes-remote.js'
 import { runtimeRoutes } from './routes-runtime.js'
+import { scenarioRoutes } from './routes-scenarios.js'
 import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
 import { teamRoutes } from './routes-team.js'
+import { teamGoalRoutes } from './routes-team-goals.js'
+import { teamMemoryRoutes } from './routes-team-memory.js'
+import { teamMessageRoutes } from './routes-team-messages.js'
+import { teamRecallRoutes } from './routes-team-recall.js'
+import { teamReviewRoutes } from './routes-team-review.js'
 import { uiRoutes } from './routes-ui.js'
 import { versionRoutes } from './routes-version.js'
+import { workerRoutes } from './routes-workers.js'
+import { workflowScheduleRoutes } from './routes-workflow-schedules.js'
+import { workflowRoutes } from './routes-workflows.js'
+import { workspaceMemoryRoutes } from './routes-workspace-memory.js'
+import { workspaceMemoryDreamRoutes } from './routes-workspace-memory-dreams.js'
+import { workspaceUploadRoutes } from './routes-workspace-uploads.js'
 import { workspaceRoutes } from './routes-workspaces.js'
 
 const routes: RouteDefinition[] = [
   ...workspaceRoutes,
+  ...controllerRoutes,
+  ...workerRoutes,
+  ...scenarioRoutes,
+  ...workspaceUploadRoutes,
   ...openWorkspaceRoutes,
+  ...actionCenterRoutes,
+  ...diagnosticsRoutes,
   ...dispatchRoutes,
   ...versionRoutes,
   ...uiRoutes,
   ...settingsRoutes,
   ...taskRoutes,
+  ...workspaceMemoryDreamRoutes,
+  ...workspaceMemoryRoutes,
   ...runtimeRoutes,
+  ...externalGoalRoutes,
+  ...teamRecallRoutes,
+  ...teamMemoryRoutes,
+  ...teamGoalRoutes,
   ...teamRoutes,
+  ...teamReviewRoutes,
+  ...teamMessageRoutes,
   ...fsRoutes,
   ...marketplaceRoutes,
+  ...workflowRoutes,
+  ...workflowScheduleRoutes,
+  ...remoteRoutes,
 ]
 
 export const matchRoute = (method: string, pathname: string) => {

@@ -9,8 +9,11 @@ export const DEMO_WORKSPACE: WorkspaceSummary = {
 /**
  * The orchestrator is split out from `DEMO_WORKERS` to match production:
  * `listWorkers` excludes the orchestrator from the team list. Threading it
- * into the workers array would render queen as a worker card alongside alice
- * and bob, which is not how Hive actually behaves.
+ * into the workers array would render queen as a worker card alongside
+ * ada-lovelace and socrates, which is not how Hive actually behaves.
+ *
+ * Worker names here are fixed demo identities (not drawn from the live
+ * agent-name-bank pool in `src/shared/random-worker-name.ts`).
  */
 export const DEMO_ORCHESTRATOR = {
   id: 'demo-orch',
@@ -22,7 +25,7 @@ export const DEMO_ORCHESTRATOR = {
 export const DEMO_WORKERS: TeamListItem[] = [
   {
     id: 'demo-coder',
-    name: 'alice',
+    name: 'ada-lovelace',
     role: 'coder',
     status: 'working',
     pendingTaskCount: 1,
@@ -31,7 +34,7 @@ export const DEMO_WORKERS: TeamListItem[] = [
   },
   {
     id: 'demo-reviewer',
-    name: 'bob',
+    name: 'socrates',
     role: 'reviewer',
     status: 'idle',
     pendingTaskCount: 0,
@@ -50,11 +53,11 @@ export const DEMO_TASKS_MD = `# Todo app
 
 export const DEMO_TERMINAL_SCROLLBACK: Record<string, string> = {
   'demo-orch':
-    '$ team send alice "Implement POST /todos"\r\n' +
-    '> dispatched to alice\r\n' +
+    '$ team send ada-lovelace "Implement POST /todos"\r\n' +
+    '> dispatched to ada-lovelace\r\n' +
     '$ team list\r\n' +
-    '> alice: working (1 task)\r\n' +
-    '> bob: idle\r\n',
+    '> ada-lovelace: working (1 task)\r\n' +
+    '> socrates: idle\r\n',
   'demo-coder':
     'Reading src/routes/todos.ts ...\r\n' +
     'Drafting POST handler ...\r\n' +

@@ -9,6 +9,7 @@ import {
   serializeTerminalRestore,
 } from './terminal-protocol.js'
 import { type TerminalMirrorSize, TerminalStateMirror } from './terminal-state-mirror.js'
+import { attachWebSocketErrorHandler, sendWebSocketMessage } from './websocket-upgrade-safety.js'
 
 interface ViewerState {
   clientId: string
@@ -126,8 +127,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         const payload = serializeTerminalExit(run.exitCode)
         for (const viewer of state.viewers.values()) {
           const controlSocket = viewer.controlSocket
-          if (controlSocket && controlSocket.readyState === controlSocket.OPEN)
-            controlSocket.send(payload)
+          if (controlSocket) sendWebSocketMessage(controlSocket, payload, `terminal ${runId} exit`)
         }
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.exitInterval = null
@@ -142,16 +142,21 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   return {
     attachControl(runId, clientId, socket, initialSize) {
       const state = getOrCreateState(runId, initialSize)
+      attachWebSocketErrorHandler(socket, `terminal ${runId} control`)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.controlSocket = socket
       startExitWatcher(runId, state)
       void state.mirror
         .getSnapshot()
         .then((snapshot) => {
-          if (socket.readyState === socket.OPEN) socket.send(serializeTerminalRestore(snapshot))
+          sendWebSocketMessage(
+            socket,
+            serializeTerminalRestore(snapshot),
+            `terminal ${runId} restore`
+          )
         })
         .catch(() => {
-          if (socket.readyState === socket.OPEN) socket.send(serializeTerminalRestore(''))
+          sendWebSocketMessage(socket, serializeTerminalRestore(''), `terminal ${runId} restore`)
         })
       socket.on('message', (raw) => {
         try {
@@ -164,10 +169,12 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
           if (message.type === 'stop') store.stopAgentRun(runId)
           if (message.type === 'restore_complete') return
         } catch (error) {
-          socket.send(
+          sendWebSocketMessage(
+            socket,
             serializeTerminalError(
               error instanceof Error ? error.message : 'Invalid control message'
-            )
+            ),
+            `terminal ${runId} control error`
           )
         }
       })
@@ -178,6 +185,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     },
     attachIo(runId, clientId, socket, initialSize) {
       const state = getOrCreateState(runId, initialSize)
+      attachWebSocketErrorHandler(socket, `terminal ${runId} io`)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.ioSocket = socket
       viewer.flowState?.close()
@@ -193,7 +201,17 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         },
       })
       socket.on('message', (raw, isBinary) => {
-        store.writeRunInput(runId, normalizeTerminalInput(raw, isBinary))
+        try {
+          store.writeRunInput(runId, normalizeTerminalInput(raw, isBinary))
+        } catch (error) {
+          sendWebSocketMessage(
+            socket,
+            serializeTerminalError(
+              error instanceof Error ? error.message : 'Failed to write terminal input'
+            ),
+            `terminal ${runId} input error`
+          )
+        }
       })
       socket.on('close', () => {
         if (viewer.ioSocket === socket) viewer.ioSocket = null
@@ -209,8 +227,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         state.mirror.dispose()
         for (const viewer of state.viewers.values()) {
           viewer.flowState?.close()
-          viewer.ioSocket?.close()
-          viewer.controlSocket?.close()
+          viewer.ioSocket?.terminate()
+          viewer.controlSocket?.terminate()
         }
         runStates.delete(runId)
       }

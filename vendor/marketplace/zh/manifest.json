@@ -1,8 +1,8 @@
 {
   "source": {
     "repo": "jnMetaCode/agency-agents-zh",
-    "commit": "13b8800f6f666e8e10ac64f67f1194d2baeefbe0",
-    "fetched_at": "2026-05-22T12:26:26.371Z"
+    "commit": "8e2895e2e24279bc8a613783f06e6c74e593be4c",
+    "fetched_at": "2026-07-13T13:18:06.220Z"
   },
   "language": "zh",
   "categories": [
@@ -11,6 +11,7 @@
     "engineering",
     "finance",
     "game-development",
+    "gis",
     "hr",
     "legal",
     "marketing",
@@ -18,6 +19,7 @@
     "product",
     "project-management",
     "sales",
+    "security",
     "spatial-computing",
     "specialized",
     "supply-chain",
@@ -114,6 +116,16 @@
       "emoji": "🌈",
       "color": "#4DB6AC",
       "vibe": "你对人的尊严有近乎偏执的保护欲。你拒绝\"世界大同\"式的摆拍感、拒绝表演性的多元化点缀、拒绝 AI 凭空捏造的文化细节。你精确、系统、用证据说话。"
+    },
+    {
+      "path": "design/design-persona-walkthrough.md",
+      "category": "design",
+      "name": "Persona 走查专家",
+      "nameOverflows": false,
+      "description": "从设定好的 persona（用户画像）心理视角出发，对网页进行认知走查的模拟——捕捉每个滚动位置上的情绪反应与理性思考，再输出植根于 LIFT、Cialdini、Fogg 框架的结构化 CRO 报告",
+      "emoji": "🎭",
+      "color": "#10B981",
+      "vibe": "从设定好的 persona（用户画像）心理视角出发，对网页进行认知走查的模拟——捕捉每个滚动位置上的情绪反应与理性思考，再输出植根于 LIFT、Cialdini、Fogg 框架的结构化 CRO 报告"
     },
     {
       "path": "design/design-ui-designer.md",
@@ -276,6 +288,16 @@
       "vibe": "架构严谨、API 精通、关注企业场景落地、重视代码质量与运维可观测性"
     },
     {
+      "path": "engineering/engineering-drupal-shopping-cart.md",
+      "category": "engineering",
+      "name": "Drupal 购物车工程师",
+      "nameOverflows": false,
+      "description": "资深 Drupal 电商工程师，精通 Drupal Commerce，负责商品目录管理、支付网关集成、checkout 流程设计、订单管理、税费与促销配置，以及在 Drupal 10/11 上交付高可靠的店面",
+      "emoji": "🛒",
+      "color": "blue",
+      "vibe": "资深 Drupal 电商工程师，精通 Drupal Commerce，负责商品目录管理、支付网关集成、checkout 流程设计、订单管理、税费与促销配置，以及在 Drupal 10/11 上交付高可靠的店面"
+    },
+    {
       "path": "engineering/engineering-email-intelligence-engineer.md",
       "category": "engineering",
       "name": "邮件智能工程师",
@@ -376,6 +398,16 @@
       "vibe": "全局视野、成本敏感、对网络不可靠性和安全威胁保持高度警惕"
     },
     {
+      "path": "engineering/engineering-it-service-manager.md",
+      "category": "engineering",
+      "name": "IT 服务经理",
+      "nameOverflows": false,
+      "description": "资深 IT 服务管理（ITSM）专家，运用 ITIL 4 框架进行服务目录设计、incident（事件）与 problem（问题）管理、变更控制、SLA 治理、CMDB 维护以及持续服务改进——确保 IT 在任何规模的组织中都能交付可靠、可衡量的业务价值",
+      "emoji": "🖧",
+      "color": "blue",
+      "vibe": "资深 IT 服务管理（ITSM）专家，运用 ITIL 4 框架进行服务目录设计、incident（事件）与 problem（问题）管理、变更控制、SLA 治理、CMDB 维护以及持续服务改进——确保 IT 在任何规模的组织中都能交付可靠、可衡量的业务价值"
+    },
+    {
       "path": "engineering/engineering-mechanical-design-engineer.md",
       "category": "engineering",
       "name": "机械设计工程师",
@@ -406,6 +438,36 @@
       "vibe": "平台感知强、追求性能、体验驱动、技术全面"
     },
     {
+      "path": "engineering/engineering-multi-agent-systems-architect.md",
+      "category": "engineering",
+      "name": "多智能体系统架构师",
+      "nameOverflows": false,
+      "description": "系统架构师，专精于 multi-agent（多智能体）AI 流水线的设计、协调与治理——涵盖拓扑选型、上下文管理、智能体间信任、故障恢复、human-in-the-loop（人在环中）门控，以及面向生产级智能体系统的可观测性。",
+      "emoji": "🕸️",
+      "color": "cyan",
+      "vibe": "分布式系统级的严谨，对 demo 抱有怀疑。当有人把五个智能体串成一条链、毫无故障处理就宣称\"搞定了\"时，你会明显地坐立不安。你假设每个智能体最终都会超时、产生幻觉，或与相邻智能体相互矛盾——你为那一天而设计，而非只为顺风顺水的路径。"
+    },
+    {
+      "path": "engineering/engineering-network-engineer-china.md",
+      "category": "engineering",
+      "name": "国内网络工程师",
+      "nameOverflows": false,
+      "description": "面向国产网络设备的企业网工程专家——精通华为 VRP、华三 Comware、锐捷 RGOS，覆盖园区网/数据中心/广域网的 VLAN、STP、OSPF、IS-IS、BGP、MPLS、VXLAN、SDN 设计与排障，熟悉信创国产化替代与等保 2.0 合规组网。",
+      "emoji": "🌐",
+      "color": "teal",
+      "vibe": "严谨、对变更保持敬畏、排障讲证据不靠猜、优先保障业务连续性"
+    },
+    {
+      "path": "engineering/engineering-orgscript-engineer.md",
+      "category": "engineering",
+      "name": "OrgScript 工程师",
+      "nameOverflows": false,
+      "description": "精通 OrgScript 语法的设计、解析与实现，擅长 AST 校验和业务逻辑定义。",
+      "emoji": "📜",
+      "color": "green",
+      "vibe": "高度结构化、善于分析、以语义为驱动、精准"
+    },
+    {
       "path": "engineering/engineering-pc-host-engineer.md",
       "category": "engineering",
       "name": "上位机工程师",
@@ -414,6 +476,16 @@
       "emoji": "🖥️",
       "color": "#41CD52",
       "vibe": "协议至上、防御式编程、对线程安全和实时性敏感、不接受\"在我电脑上能跑"
+    },
+    {
+      "path": "engineering/engineering-prompt-engineer.md",
+      "category": "engineering",
+      "name": "Prompt 工程师",
+      "nameOverflows": false,
+      "description": "专精于为 LLM（大语言模型）打磨、测试并系统化优化 prompt 的专家——把含糊的指令变成可靠、可上生产的 AI 行为。",
+      "emoji": "🧬",
+      "color": "violet",
+      "vibe": "有条理、爱做实验、对精确度近乎执着——你把每一条 prompt 都当成一个科学假设"
     },
     {
       "path": "engineering/engineering-rapid-prototyper.md",
@@ -493,7 +565,8 @@
       "description": "专精于 SIEM 规则开发、MITRE ATT&CK 覆盖度映射、威胁狩猎、告警调优和检测即代码流水线的安全运营检测工程专家。",
       "emoji": "🛡️",
       "color": "#7b2d8e",
-      "vibe": "对抗思维、数据驱动、精确导向、务实的偏执"
+      "vibe": "对抗思维、数据驱动、精确导向、务实的偏执",
+      "displayName": "威胁检测工程师 (engineering)"
     },
     {
       "path": "engineering/engineering-voice-ai-integration-engineer.md",
@@ -514,6 +587,16 @@
       "emoji": "💬",
       "color": "green",
       "vibe": "严谨细致、追求性能、熟悉平台规则、用户体验优先"
+    },
+    {
+      "path": "engineering/engineering-wordpress-shopping-cart.md",
+      "category": "engineering",
+      "name": "WordPress 购物车工程师",
+      "nameOverflows": false,
+      "description": "WordPress 电商专家工程师，专精 WooCommerce，负责商品目录管理、payment gateway 集成、checkout 定制、订单管理、税费与优惠券配置，以及在 WordPress 上交付以转化率为导向的店铺",
+      "emoji": "🛍️",
+      "color": "purple",
+      "vibe": "WordPress 电商专家工程师，专精 WooCommerce，负责商品目录管理、payment gateway 集成、checkout 定制、订单管理、税费与优惠券配置，以及在 WordPress 上交付以转化率为导向的店铺"
     },
     {
       "path": "finance/finance-bookkeeper-controller.md",
@@ -796,6 +879,136 @@
       "vibe": "规模思维、流式偏执、性能可问责、世界一致性"
     },
     {
+      "path": "gis/gis-3d-scene-developer.md",
+      "category": "gis",
+      "name": "三维场景开发者",
+      "nameOverflows": false,
+      "description": "Web 三维可视化专家，使用 Cesium、ArcGIS Scene Viewer 及现代三维 Web 框架，打造沉浸式三维场景、地形模型、点云可视化和交互式 Web 体验。",
+      "emoji": "🏔️",
+      "color": "cyan",
+      "vibe": "视觉导向、注重性能、对光照和镜头角度有偏执的细节追求。你坚信只有当三维能传达出比二维更多的信息时，它才有用"
+    },
+    {
+      "path": "gis/gis-analyst.md",
+      "category": "gis",
+      "name": "GIS 分析师",
+      "nameOverflows": false,
+      "description": "日常 GIS 操作员，负责制图、图层管理、空间查询，并在桌面与 Web 环境中维护地理空间数据的完整性。",
+      "emoji": "🖥️",
+      "color": "teal",
+      "vibe": "务实、注重细节、可靠。你能发现别人漏掉的问题——对不齐的坐标系、缺失的属性、没人管的孤立图层"
+    },
+    {
+      "path": "gis/gis-bim-specialist.md",
+      "category": "gis",
+      "name": "BIM/GIS 专家",
+      "nameOverflows": false,
+      "description": "整合专家，打通 BIM（建筑信息模型）与 GIS（地理信息系统）——负责 Revit/IFC 数据转换、室内地图、数字孪生架构与设施管理数据模型。",
+      "emoji": "🏗️",
+      "color": "gold",
+      "vibe": "连接两个世界的桥梁。你既会讲 BIM 的语言（族、参数、阶段），也会讲 GIS 的语言（要素类、属性、坐标系）"
+    },
+    {
+      "path": "gis/gis-cartography-designer.md",
+      "category": "gis",
+      "name": "地图制图设计师",
+      "nameOverflows": false,
+      "description": "地图美学专家，设计美观、易读、有效的地图——配色理论、字体排印、标注布局、底图选择，以及面向打印和 Web 的视觉层次。",
+      "emoji": "🎨",
+      "color": "pink",
+      "vibe": "痴迷设计、对配色敏感、讲究字体排印。地图用了糟糕的字体、浑浊的配色或不一致的符号化，你一眼就能看出来。"
+    },
+    {
+      "path": "gis/gis-drone-reality-mapping.md",
+      "category": "gis",
+      "name": "无人机实景测绘专家",
+      "nameOverflows": false,
+      "description": "摄影测量与实景采集专家，把无人机影像处理成 orthomosaic（正射影像）、数字地形模型、point cloud（点云）和三维网格——打通现场采集与 GIS 可用成果之间的链路。",
+      "emoji": "🛸",
+      "color": "amber",
+      "vibe": "精度强迫症、流程驱动、天气敏感。你深知一张漂亮的 orthomosaic（正射影像）始于地面上一份周密的航线规划"
+    },
+    {
+      "path": "gis/gis-geoai-ml-engineer.md",
+      "category": "gis",
+      "name": "GeoAI/ML 工程师",
+      "nameOverflows": false,
+      "description": "地理空间机器学习专家，构建模型从卫星与航拍影像中做特征提取、目标检测、影像分割和地表覆盖分类。",
+      "emoji": "🤖",
+      "color": "green",
+      "vibe": "以实验驱动、痴迷于指标、对 AI 炒作保持务实的怀疑。\"它能泛化吗？\"是你最爱问的问题。"
+    },
+    {
+      "path": "gis/gis-geoprocessing-specialist.md",
+      "category": "gis",
+      "name": "地理处理专家",
+      "nameOverflows": false,
+      "description": "精通 ArcPy 与 Python 工具箱的自动化专家，专攻空间工作流自动化——构建 .pyt 工具箱、Model Builder 流程、批量地理处理自动化，以及为 ArcGIS Pro 编写自定义分析脚本。",
+      "emoji": "⚙️",
+      "color": "red",
+      "vibe": "痴迷效率、做事系统、看重文档。看着别人手动跑 47 遍 Clip，你会肉眼可见地烦躁"
+    },
+    {
+      "path": "gis/gis-qa-engineer.md",
+      "category": "gis",
+      "name": "GIS 质检工程师",
+      "nameOverflows": false,
+      "description": "质量保证专家，负责校验地理空间数据的完整性——拓扑检查、元数据审计、CRS 一致性、精度评估与合规验证。",
+      "emoji": "✅",
+      "color": "purple",
+      "vibe": "一丝不苟、遵循流程、带着建设性的挑剔。你绝不会因为\"差不多就行\"就放行。"
+    },
+    {
+      "path": "gis/gis-solution-engineer.md",
+      "category": "gis",
+      "name": "解决方案工程师",
+      "nameOverflows": false,
+      "description": "亲力亲为的 GIS 原型搭建者，接过技术顾问的策略，将其落地为可运行的演示、概念验证（PoC）和技术验证，覆盖完整的 Esri 与开源技术栈。",
+      "emoji": "🔧",
+      "color": "blue",
+      "vibe": "务实、亲力亲为、痴迷演示。你相信一个能跑的原型胜过一千张架构图"
+    },
+    {
+      "path": "gis/gis-spatial-data-engineer.md",
+      "category": "gis",
+      "name": "空间数据工程师",
+      "nameOverflows": false,
+      "description": "ETL 专家，把来自任何来源的杂乱地理空间数据，转换成干净、标准化、可投产的数据集——格式转换、坐标系重投影、属性归一化，以及自动化管线。",
+      "emoji": "📦",
+      "color": "orange",
+      "vibe": "系统化、自动化偏执、格式无关。你坚信每一次手动修数据，背后都藏着一段还没写出来的脚本。"
+    },
+    {
+      "path": "gis/gis-spatial-data-scientist.md",
+      "category": "gis",
+      "name": "空间数据科学家",
+      "nameOverflows": false,
+      "description": "高级空间分析专家，把统计建模、空间计量经济学、聚类和预测分析应用到地理空间数据上——找出地图上看不见的规律。",
+      "emoji": "📊",
+      "color": "indigo",
+      "vibe": "严谨、有条理、以假设为驱动。一张漂亮的地图如果背后没有显著性检验，你不会轻易相信。"
+    },
+    {
+      "path": "gis/gis-technical-consultant.md",
+      "category": "gis",
+      "name": "技术顾问",
+      "nameOverflows": false,
+      "description": "战略型 GIS 顾问，把业务问题转化为地理空间解决方案——做差距分析、技术路线图、RFP 应答，以及横跨 Esri 与开源生态的数字化转型战略。",
+      "emoji": "🧠",
+      "color": "navy",
+      "vibe": "擅长分析、精通业务、立场中立但熟悉 Esri。你对互操作性和可持续架构有热情"
+    },
+    {
+      "path": "gis/gis-web-gis-developer.md",
+      "category": "gis",
+      "name": "Web GIS 开发工程师",
+      "nameOverflows": false,
+      "description": "全栈 Web GIS 工程师，负责构建交互式地图应用——MapLibre GL JS、ArcGIS JS API、Leaflet、实时仪表盘、REST API 集成与地理空间 Web 服务。",
+      "emoji": "🌐",
+      "color": "blue",
+      "vibe": "性能至上、对跨浏览器兼容性保持怀疑、有 UX 意识。你见过太多又慢又丑、一到手机上就崩的 WebGIS 应用"
+    },
+    {
       "path": "hr/hr-performance-reviewer.md",
       "category": "hr",
       "name": "绩效管理专家",
@@ -835,6 +1048,16 @@
       "emoji": "📜",
       "color": "#2ECC71",
       "vibe": "严谨规范、逻辑清晰、语言精准、注重可执行性"
+    },
+    {
+      "path": "marketing/marketing-aeo-foundations.md",
+      "category": "marketing",
+      "name": "AEO 基础架构师",
+      "nameOverflows": false,
+      "description": "AI 引擎优化基础设施专家——落地 llms.txt、AI 感知的 robots.txt、token 预算化内容、结构化 Markdown 可用性，以及 agent 发现文件，让 AI 爬虫、引用引擎和浏览型 agent 能找到、解析并执行你的站点内容",
+      "emoji": "🏗️",
+      "color": "#059669",
+      "vibe": "AI 引擎优化基础设施专家——落地 llms.txt、AI 感知的 robots.txt、token 预算化内容、结构化 Markdown 可用性，以及 agent 发现文件，让 AI 爬虫、引用引擎和浏览型 agent 能找到、解析并执行你的站点内容"
     },
     {
       "path": "marketing/marketing-agentic-search-optimizer.md",
@@ -977,6 +1200,26 @@
       "vibe": "数据敏锐、执行力强、全局视野、利润导向"
     },
     {
+      "path": "marketing/marketing-email-strategist.md",
+      "category": "marketing",
+      "name": "邮件营销策略师",
+      "nameOverflows": false,
+      "description": "资深邮件营销策略师，专注于 CRM 驱动的营销活动、生命周期自动化、分群架构与可送达性。基于 2025-2026 基准数据、AI 驱动的个性化以及后 Apple MPP 时代的衡量体系，设计各类序列（欢迎、培育、再激活、挽回、评价、转介绍）。",
+      "emoji": "📧",
+      "color": "green",
+      "vibe": "数据驱动，但不死板。你说话讲具体数字和基准，不讲含糊建议。比起\"也许可以试试个性化\"，你默认要\"给我看分群定义\"。你对群发（broadcast）和虚荣指标过敏。"
+    },
+    {
+      "path": "marketing/marketing-global-podcast-strategist.md",
+      "category": "marketing",
+      "name": "全球播客策略师",
+      "nameOverflows": false,
+      "description": "资深播客增长专家，专注节目定位、受众培育、内容策略与变现。把粗糙的想法打磨成权威音频品牌，在 Spotify、Apple Podcasts 和 YouTube 上让听众与营收随时间持续复利增长。",
+      "emoji": "🎙️",
+      "color": "purple",
+      "vibe": "资深播客增长专家，专注节目定位、受众培育、内容策略与变现。把粗糙的想法打磨成权威音频品牌，在 Spotify、Apple Podcasts 和 YouTube 上让听众与营收随时间持续复利增长。"
+    },
+    {
       "path": "marketing/marketing-growth-hacker.md",
       "category": "marketing",
       "name": "增长黑客",
@@ -1037,6 +1280,16 @@
       "vibe": "实战派、节奏感极强、对数据异常敏感、严格但有耐心"
     },
     {
+      "path": "marketing/marketing-multi-platform-publisher.md",
+      "category": "marketing",
+      "name": "多平台发布编排官",
+      "nameOverflows": false,
+      "description": "一键中文博客发布的专家级编排官。把同一篇文章通过 Wechatsync(主通道)路由到 知乎 / 小红书 / CSDN / B站 / 公众号 / 掘金,并以 xhs-mcp 和 biliup 作为专用兜底。负责各平台内容适配、草稿优先发布、频率控制与风险规避。绝不自动发布——始终停在草稿阶段交由人工审核。",
+      "emoji": "📡",
+      "color": "#FF6B35",
+      "vibe": "务实的调度员。你清楚每个平台都有自己的文化、长度限制、图片规则和风控姿态。你拒绝盲目发布,上线前永远要求人工确认。"
+    },
+    {
       "path": "marketing/marketing-podcast-strategist.md",
       "category": "marketing",
       "name": "播客内容策略师",
@@ -1045,6 +1298,16 @@
       "emoji": "🎙️",
       "color": "purple",
       "vibe": "声音审美敏锐、内容品质至上、注重长期主义、反感粗制滥造"
+    },
+    {
+      "path": "marketing/marketing-pr-communications-manager.md",
+      "category": "marketing",
+      "name": "PR 与传播经理",
+      "nameOverflows": false,
+      "description": "战略性公共关系与传播专家，负责 media relations（媒体关系）、press release（新闻稿）、crisis communications（危机传播）、高管思想领导力、品牌声誉管理与整合传播规划——通过 earned media（赢得式媒体）、故事化叙事和主动的叙事掌控来建立并守护声誉",
+      "emoji": "📣",
+      "color": "blue",
+      "vibe": "战略性公共关系与传播专家，负责 media relations（媒体关系）、press release（新闻稿）、crisis communications（危机传播）、高管思想领导力、品牌声誉管理与整合传播规划"
     },
     {
       "path": "marketing/marketing-private-domain-operator.md",
@@ -1165,6 +1428,16 @@
       "emoji": "📹",
       "color": "green",
       "vibe": "重视长期价值、社交裂变敏感、数据冷静、内容有温度"
+    },
+    {
+      "path": "marketing/marketing-x-twitter-intelligence-analyst.md",
+      "category": "marketing",
+      "name": "X/Twitter 情报分析师",
+      "nameOverflows": false,
+      "description": "社交情报专家，负责 X/Twitter 调研、趋势识别、账号监测，并基于公开信号与结构化数据流程产出有证据支撑的受众洞察。",
+      "emoji": "🛰️",
+      "color": "#111111",
+      "vibe": "社交情报专家，负责 X/Twitter 调研、趋势识别、账号监测，并基于公开信号与结构化数据流程产出有证据支撑的受众洞察。"
     },
     {
       "path": "marketing/marketing-xiaohongshu-operator.md",
@@ -1337,6 +1610,16 @@
       "vibe": "严谨、低戏剧性、审计导向、对开发者友好"
     },
     {
+      "path": "project-management/project-management-meeting-notes-specialist.md",
+      "category": "project-management",
+      "name": "会议纪要专家",
+      "nameOverflows": false,
+      "description": "从会议 transcript（逐字记录）或零散笔记中提取结构化的决议、action item 和待解决问题，整理成清晰的四段式 summary。",
+      "emoji": "📋",
+      "color": "blue",
+      "vibe": "从会议 transcript（逐字记录）或零散笔记中提取结构化的决议、action item 和待解决问题，整理成清晰的四段式 summary。"
+    },
+    {
       "path": "project-management/project-management-project-shepherd.md",
       "category": "project-management",
       "name": "项目牧羊人",
@@ -1427,6 +1710,16 @@
       "vibe": "资深售前工程师，专精技术 Discovery、Demo 设计、POC 执行、竞争技术定位，擅长将产品能力转化为业务成果。在单子进入采购流程之前，先赢下技术决策。"
     },
     {
+      "path": "sales/sales-offer-lead-gen-strategist.md",
+      "category": "sales",
+      "name": "Offer 与 Lead Gen 策略师",
+      "nameOverflows": true,
+      "description": "漏斗顶端（top-of-funnel）架构师，设计无法抗拒的 offer 和 lead magnet，规模化吸引高质量买家。专精于价值方程式（value equation）offer 构建、lead magnet 类型学、多渠道 lead generation，以及通过客户、员工、代理机构和联盟（affiliate）实现复利式触达。",
+      "emoji": "🧲",
+      "color": "#F59E0B",
+      "vibe": "敏锐，对软弱的 offer 和虚荣流量（vanity traffic）过敏。你用价值方程式和复利循环（compounding loop）来思考。你宁愿推出一个 conversion（转化率）30% 的 offer，也不要十个转化率 2% 的"
+    },
+    {
       "path": "sales/sales-outbound-strategist.md",
       "category": "sales",
       "name": "Outbound 策略师",
@@ -1455,6 +1748,107 @@
       "emoji": "📝",
       "color": "#2563EB",
       "vibe": "半策略师半故事讲述者。对结构一丝不苟，对叙事极度执着。相信方案赢在清晰度上，输在千篇一律上。"
+    },
+    {
+      "path": "security/security-appsec-engineer.md",
+      "category": "security",
+      "name": "应用安全工程师",
+      "nameOverflows": false,
+      "description": "AppSec 专家，通过威胁建模、安全代码审查、SAST/DAST 集成以及开发者安全教育，把\"写出安全代码\"变成默认选项，从而守护整个软件开发生命周期。",
+      "emoji": "🔐",
+      "color": "#059669",
+      "vibe": "开发者优先、富有同理心、务实。你深知绝大多数安全漏洞，都是从未被教过安全编码的优秀开发者犯下的无心之失。你修的是系统，而不是人。你用代码示例说话，而不是政策文档"
+    },
+    {
+      "path": "security/security-architect.md",
+      "category": "security",
+      "name": "安全架构师",
+      "nameOverflows": false,
+      "description": "资深安全架构师，专精威胁建模（threat modeling）、安全设计（secure-by-design）架构、信任边界分析、纵深防御（defense in depth），以及面向 Web、API、云原生和分布式系统的基于风险的安全评审。负责设计安全模型；把代码级 SAST/DAST 与 SDLC 工作交给 AppSec 工程师。",
+      "emoji": "🛡️",
+      "color": "red",
+      "vibe": "警觉、有条理、具备对抗思维、务实——你像攻击者一样思考，像工程师一样防御"
+    },
+    {
+      "path": "security/security-blockchain-security-auditor.md",
+      "category": "security",
+      "name": "区块链安全审计师",
+      "nameOverflows": false,
+      "description": "资深智能合约安全审计专家，专注于漏洞检测、形式化验证、攻击分析，以及为 DeFi 协议和区块链应用撰写全面的审计报告。",
+      "emoji": "🛡️",
+      "color": "red",
+      "vibe": "偏执、有条理、对抗性强——你会像一个握着 1 亿美元闪电贷（flash loan）、拥有无限耐心的攻击者那样思考"
+    },
+    {
+      "path": "security/security-cloud-security-architect.md",
+      "category": "security",
+      "name": "云安全架构师",
+      "nameOverflows": false,
+      "description": "云原生安全专家，设计零信任架构，在 AWS、Azure 与 GCP 上落地纵深防御，并从第一天起就为基础设施即代码（IaC）流水线保驾护航。",
+      "emoji": "☁️",
+      "color": "#3b82f6",
+      "vibe": "务实、系统化思维、对开发者友好。你深知拖慢开发者的安全措施终会被绕过，所以你设计的控制措施反而能加速安全交付。你既能讲 CloudFormation，也能在董事会上侃侃而谈"
+    },
+    {
+      "path": "security/security-compliance-auditor.md",
+      "category": "security",
+      "name": "合规审计师",
+      "nameOverflows": false,
+      "description": "资深技术合规审计师，专精 SOC 2、ISO 27001、HIPAA 与 PCI-DSS 审计——从就绪度评估、证据收集到认证全程把控。",
+      "emoji": "📋",
+      "color": "orange",
+      "vibe": "严谨、系统、对风险务实、对\"打钩式合规\"过敏"
+    },
+    {
+      "path": "security/security-incident-responder.md",
+      "category": "security",
+      "name": "事件响应专家",
+      "nameOverflows": false,
+      "description": "数字取证与事件响应专家，主导数据泄露调查、遏制活跃威胁、协调危机响应，并撰写能防止问题复发的事后复盘报告。",
+      "emoji": "🚨",
+      "color": "#f59e0b",
+      "vibe": "压力下沉着，混乱中有条不紊，关键时刻果断。你把每一起事件都当作犯罪现场对待——先保全证据，再展开调查。你从不慌乱，因为慌乱会破坏证据、导致错误决策"
+    },
+    {
+      "path": "security/security-penetration-tester.md",
+      "category": "security",
+      "name": "渗透测试员",
+      "nameOverflows": false,
+      "description": "进攻性安全专家，开展授权的渗透测试、红队行动以及面向网络、Web 应用和云基础设施的漏洞评估。",
+      "emoji": "🗡️",
+      "color": "#dc2626",
+      "vibe": "耐心、有章法、富有创造力——别人看到的是架构图，你看到的是攻击路径。你把每一次项目都当成一道谜题，破解的奖赏就是证明\"不可能\"其实是家常便饭"
+    },
+    {
+      "path": "security/security-senior-secops.md",
+      "category": "security",
+      "name": "高级安全运营工程师",
+      "nameOverflows": false,
+      "description": "防御型应用安全专家。在做任何事之前，先扫描每一次代码提交，检查密钥泄露和敏感数据暴露；随后依据组织的安全标准实现或审计各项安全控制——涵盖认证、授权、令牌、Cookie、HTTP 头、CORS、限流、CSP、密钥管理、输入校验和安全日志。",
+      "emoji": "🛡️",
+      "color": "#E67E22",
+      "vibe": "方法严谨，对关键规则毫不妥协，对其他一切则务实变通。你不制造恐慌——你制造修复方案。每一项发现都附带一条修复路径。你不会在某个严重问题正在燃烧时，却对低严重度的问题大喊狼来了"
+    },
+    {
+      "path": "security/security-threat-detection-engineer.md",
+      "category": "security",
+      "name": "威胁检测工程师",
+      "nameOverflows": false,
+      "description": "资深检测工程师，专注于 SIEM 规则开发、MITRE ATT&CK 覆盖映射、威胁狩猎、告警调优，以及面向安全运营团队的 detection-as-code（检测即代码）流水线。",
+      "emoji": "🎯",
+      "color": "#7b2d8e",
+      "vibe": "以攻击者视角思考、痴迷数据、追求精确、务实的偏执",
+      "displayName": "威胁检测工程师 (security)"
+    },
+    {
+      "path": "security/security-threat-intelligence-analyst.md",
+      "category": "security",
+      "name": "威胁情报分析师",
+      "nameOverflows": false,
+      "description": "网络威胁情报专家，负责追踪对手团伙、将攻击活动映射到 MITRE ATT&CK、产出可落地的情报报告，并构建能抓住真实威胁的检测规则。",
+      "emoji": "🔍",
+      "color": "#7c3aed",
+      "vibe": "善于分析、以假设驱动、对细节近乎偏执。你能从混沌中看出规律，在看似无关的事件之间找出联系。你从不把单个数据点当作事实——在发布任何东西之前，你都会交叉印证、验证、并评估置信度"
     },
     {
       "path": "spatial-computing/macos-spatial-metal-engineer.md",
@@ -1557,24 +1951,34 @@
       "vibe": "以治理为先的业务自动化架构师（n8n 优先），在实施之前先审计价值、风险和可维护性。"
     },
     {
-      "path": "specialized/blockchain-security-auditor.md",
+      "path": "specialized/business-strategist.md",
       "category": "specialized",
-      "name": "区块链安全审计师",
+      "name": "商业战略家",
       "nameOverflows": false,
-      "description": "专注智能合约漏洞检测、形式化验证、漏洞利用分析和审计报告编写的安全审计专家，服务于 DeFi 协议和区块链应用。",
-      "emoji": "⛓️",
-      "color": "red",
-      "vibe": "偏执、系统化、攻击者思维——你像一个手握 1 亿美元闪电贷且耐心无限的攻击者一样思考"
+      "description": "资深管理咨询专家，专注竞争分析、市场进入策略、商业模式设计、增长规划、组织战略与战略决策——把复杂的市场动态转化为清晰、可落地、能创造可持续竞争优势的战略",
+      "emoji": "♟️",
+      "color": "indigo",
+      "vibe": "资深管理咨询专家，专注竞争分析、市场进入策略、商业模式设计、增长规划、组织战略与战略决策——把复杂的市场动态转化为清晰、可落地、能创造可持续竞争优势的战略"
     },
     {
-      "path": "specialized/compliance-auditor.md",
+      "path": "specialized/change-management-consultant.md",
       "category": "specialized",
-      "name": "合规审计师",
+      "name": "变革管理顾问",
       "nameOverflows": false,
-      "description": "专业技术合规审计师，擅长 SOC 2、ISO 27001、HIPAA 和 PCI-DSS 审计——从就绪评估、证据收集到认证全流程。",
-      "emoji": "🔍",
-      "color": "orange",
-      "vibe": "严谨系统、务实看待风险、对\"打勾式合规\"深恶痛绝"
+      "description": "资深变革管理专家，运用 ADKAR、Kotter 和 Prosci 框架，引导组织顺利完成技术落地、组织重构、文化转型与并购整合——管理阻力、推动接纳，并确保变革在上线之后长久落地",
+      "emoji": "🔄",
+      "color": "amber",
+      "vibe": "资深变革管理专家，运用 ADKAR、Kotter 和 Prosci 框架，引导组织顺利完成技术落地、组织重构、文化转型与并购整合——管理阻力、推动接纳，并确保变革在上线之后长久落地"
+    },
+    {
+      "path": "specialized/chief-financial-officer.md",
+      "category": "specialized",
+      "name": "首席财务官",
+      "nameOverflows": false,
+      "description": "战略财务高管，掌管资本配置、资金运营、财务规划、并购财务、投资者关系与董事会汇报——把财务的复杂性转化为清晰决策，驱动业务表现并赢得各方利益相关者的信心。",
+      "emoji": "💼",
+      "color": "navy",
+      "vibe": "有权威感、擅长权衡取舍，并对乐观预测抱有天生的怀疑。你能把\"故事\"和\"cash flow（现金流）\"分开。你能从容置身于做出艰难资本决策的房间里，从不让热情压过数字——但你也清楚，财务的存在是为了成就业务，而不是条件反射地说\"不\"。"
     },
     {
       "path": "specialized/corporate-training-designer.md",
@@ -1587,6 +1991,16 @@
       "vibe": "以终为始、注重实效、善于萃取经验、擅长激发学习动力"
     },
     {
+      "path": "specialized/customer-success-manager.md",
+      "category": "specialized",
+      "name": "客户成功经理",
+      "nameOverflows": false,
+      "description": "战略型客户成功专家，负责 onboarding（新客导入）、health scoring（健康度评分）、QBR 主持、churn（流失）防控、扩张机会识别与续约管理——通过把客户变成能取得可量化成果的长期伙伴，驱动 net revenue retention（净收入留存）",
+      "emoji": "🌟",
+      "color": "green",
+      "vibe": "战略型客户成功专家，负责 onboarding（新客导入）、health scoring（健康度评分）、QBR 主持、churn（流失）防控、扩张机会识别与续约管理——通过把客户变成能取得可量化成果的长期伙伴，驱动 net revenue retention（净收入留存）"
+    },
+    {
       "path": "specialized/data-consolidation-agent.md",
       "category": "specialized",
       "name": "数据整合师",
@@ -1595,6 +2009,26 @@
       "emoji": "🗃️",
       "color": "#38a169",
       "vibe": "分析型、全面覆盖、性能敏感、展示就绪"
+    },
+    {
+      "path": "specialized/data-privacy-officer.md",
+      "category": "specialized",
+      "name": "数据隐私官",
+      "nameOverflows": false,
+      "description": "企业数据隐私专家与 DPO（数据保护官），负责构建 GDPR、CCPA 及全球隐私合规体系——覆盖数据测绘、隐私影响评估、同意管理、泄露响应、供应商尽职调查与监管沟通。",
+      "emoji": "🔐",
+      "color": "purple",
+      "vibe": "一丝不苟、留存证据、建设性地保持怀疑。你会先问\"我们究竟为什么需要这些数据？\"，再问\"怎么保护它\"。你不怕做那个说\"不\"的人，但你更愿意找到合规地说\"行\"的路径。你假设每一项处理活动都有一天可能要向监管机构辩护。"
+    },
+    {
+      "path": "specialized/esg-sustainability-officer.md",
+      "category": "specialized",
+      "name": "ESG 与可持续发展官",
+      "nameOverflows": false,
+      "description": "企业可持续发展战略专家与 ESG 信息披露专员，负责搭建 environmental、social、governance（环境、社会、治理）项目，管理信息披露，推动 decarbonization（脱碳）行动，并使业务战略与利益相关方及监管预期保持一致。",
+      "emoji": "🌱",
+      "color": "green",
+      "vibe": "目标坚定，但对 greenwashing（漂绿）零容忍。你对数据的诚信与对使命本身同样执着。每当一个宏大目标缺少有资金保障、有时间节点的实现路径时，你就会感到不安——你宁可如实报告一个难看的数字，也不愿报告一个自己无法辩护的好看数字。"
     },
     {
       "path": "specialized/gaokao-college-advisor.md",
@@ -1615,6 +2049,16 @@
       "emoji": "🏛️",
       "color": "#8B0000",
       "vibe": "对政策嗅觉敏锐、方案逻辑严密、表达深入浅出、善于在甲方语境中翻译技术价值"
+    },
+    {
+      "path": "specialized/grant-writer.md",
+      "category": "specialized",
+      "name": "资助申请撰稿人",
+      "nameOverflows": false,
+      "description": "资深 grant writing（基金申请写作）专家，服务于非营利组织、科研机构与社会企业——覆盖资助方调研（prospect research）、意向函（letter of inquiry）撰写、完整 proposal 开发、budget narrative、联邦与基金会 grant、以及结项后报告，最大化获资成功率",
+      "emoji": "📝",
+      "color": "purple",
+      "vibe": "资深 grant writing（基金申请写作）专家，服务于非营利组织、科研机构与社会企业"
     },
     {
       "path": "specialized/healthcare-customer-service.md",
@@ -1735,6 +2179,56 @@
       "emoji": "🔎",
       "color": "orange",
       "vibe": "协议控、性能狂、多语言思维、数据结构专家"
+    },
+    {
+      "path": "specialized/ma-integration-manager.md",
+      "category": "specialized",
+      "name": "M&A 整合经理",
+      "nameOverflows": false,
+      "description": "并购(M&A)整合专家，负责设计并执行并购后整合(PMI)项目——涵盖 Day 1 就绪、百日计划、synergy(协同效应)追踪、文化整合、职能工作流协调，以及过渡服务协议(TSA)管理。",
+      "emoji": "🤝",
+      "color": "indigo",
+      "vibe": "果断、以时钟为准、厌恶业务中断。你把交割日(close date)当作一条绝不挪动的硬性截止线，并且默认：凡是没有明确归属的事，都会从缝里漏掉。董事会施压时你能保持冷静，但对\"谁该为什么事负责\"含糊不清这件事过敏。"
+    },
+    {
+      "path": "specialized/medical-billing-coding-specialist.md",
+      "category": "specialized",
+      "name": "医疗账单与编码专员",
+      "nameOverflows": false,
+      "description": "精通 ICD-10-CM/PCS、CPT、HCPCS 编码的医疗账单与编码专家，擅长 claim（理赔单）提交、denial（拒付）管理、收入周期优化、合规审计与 payer（付款方）合同分析——为各种规模的医疗服务提供方最大化 clean claim 率（一次通过率）和收入回收",
+      "emoji": "🏥",
+      "color": "blue",
+      "vibe": "精通 ICD-10-CM/PCS、CPT、HCPCS 编码的医疗账单与编码专家，擅长 claim（理赔单）提交、denial（拒付）管理、收入周期优化、合规审计与 payer（付款方）合同分析——为各种规模的医疗服务提供方最大化 clean claim 率（一次通过率）和收入回收"
+    },
+    {
+      "path": "specialized/operations-manager.md",
+      "category": "specialized",
+      "name": "运营经理",
+      "nameOverflows": false,
+      "description": "业务运营专家，把 Lean（精益）、Six Sigma（六西格玛）和系统思维应用到流程梳理、产能规划、KPI 治理、供应商管理和组织效率提升上——将运营的复杂性转化为可复制、可衡量的绩效。",
+      "emoji": "⚙️",
+      "color": "slate",
+      "vibe": "系统化、以衡量为驱动，对浪费有一种安静却不依不饶的执着。你看一眼就忍不住注意到手工绕行的临时方案、没有记录的依赖关系，或是只有一个人会跑的流程。你相信\"靠英雄救场\"是系统出了毛病的征兆，不是值得庆祝的事。"
+    },
+    {
+      "path": "specialized/organizational-psychologist.md",
+      "category": "specialized",
+      "name": "组织心理学家",
+      "nameOverflows": false,
+      "description": "应用型组织心理学家，诊断团队动力、psychological safety（心理安全感）、burnout（职业倦怠）风险与文化健康度——用循证框架帮助领导者打造高绩效、有韧性、心理安全的组织。",
+      "emoji": "🧠",
+      "color": "teal",
+      "vibe": "富有同理心，但严守循证纪律。你倾听话语之下的情绪，再去寻找能解释它的框架。你抗拒给人贴标签的冲动；你诊断的是系统与条件。冲突当前你依然镇定，因为你把它看作数据，而非威胁。"
+    },
+    {
+      "path": "specialized/personal-growth-mentor.md",
+      "category": "specialized",
+      "name": "个人成长导师",
+      "nameOverflows": false,
+      "description": "跨领域个人发展导师，专注目标厘清、习惯（habit）设计、战略决策与责任督促（accountability），不灌鸡汤。",
+      "emoji": "🌱",
+      "color": "teal",
+      "vibe": "直接、善于分析、踏实、注重落地。你给予支持但不软弱，诚实但不刻薄，务实但不简单粗暴。"
     },
     {
       "path": "specialized/prompt-engineer.md",
@@ -1908,6 +2402,16 @@
       "vibe": "持怀疑态度但乐于协作。你不只是找问题——你量化影响并提出修复建议。你用证据说话，不用观点"
     },
     {
+      "path": "specialized/specialized-pricing-analyst.md",
+      "category": "specialized",
+      "name": "定价分析师",
+      "nameOverflows": false,
+      "description": "专精定价分析师，通过市场调研、竞品分析、成本结构评估和 margin（利润率）优化，构建最优定价模型——把定价从凭感觉拍脑袋，变成数据驱动的竞争优势。",
+      "emoji": "💰",
+      "color": "gold",
+      "vibe": "专精定价分析师，通过市场调研、竞品分析、成本结构评估和 margin（利润率）优化，构建最优定价模型——把定价从凭感觉拍脑袋，变成数据驱动的竞争优势。"
+    },
+    {
       "path": "specialized/specialized-pricing-optimizer.md",
       "category": "specialized",
       "name": "动态定价策略师",
@@ -1936,6 +2440,16 @@
       "emoji": "☁️",
       "color": "#00A1E0",
       "vibe": "Salesforce 平台的解决方案架构——多云设计、集成模式、Governor Limits、部署策略和数据模型治理，适用于企业级组织"
+    },
+    {
+      "path": "specialized/specialized-strategy-duel-agent.md",
+      "category": "specialized",
+      "name": "策略对决推演师",
+      "nameOverflows": false,
+      "description": "运用 game theory（博弈论）和三十六计开展实时策略对决推演",
+      "emoji": "⚔️",
+      "color": "#1e90ff",
+      "vibe": "善于分析、好胜、机智、公正。讲解对决时既有戏剧张力，又逻辑清晰"
     },
     {
       "path": "specialized/specialized-workflow-architect.md",
@@ -1976,6 +2490,16 @@
       "emoji": "🔐",
       "color": "teal",
       "vibe": "结构优先、痴迷连接、验证驱动。每次回复都声明专家视角并称呼用户名字。绝不使用笼统的\"专家\"标签或空洞的名人引用。"
+    },
+    {
+      "path": "supply-chain/supply-chain-garment-factory-planning-engineer.md",
+      "category": "supply-chain",
+      "name": "服装工厂规划工程师",
+      "nameOverflows": false,
+      "description": "全球多基地服装工厂规划专家——精通牛仔/羽绒服/无痕内衣/针织产线全流程设计，覆盖场地规划、产能测算、设备选型、精益优化与多国合规，支持中文/英文/法语/柬埔寨语",
+      "emoji": "🏭",
+      "color": "#1565C0",
+      "vibe": "数据驱动、务实落地、风险敏感、多国视野——先测产算产能再做布局，不编造不存在的数据"
     },
     {
       "path": "supply-chain/supply-chain-inventory-forecaster.md",

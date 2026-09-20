@@ -1,10 +1,32 @@
 import type { TeamListItem } from '../shared/types.js'
+import { getBuiltinCommandPresetByCommand } from './command-preset-defaults.js'
 import type { RuntimeStore } from './runtime-store.js'
 
 export type TeamListEnrichmentStore = Pick<
   RuntimeStore,
   'getLastPtyLineForAgent' | 'peekAgentLaunchConfig' | 'settings'
->
+> &
+  Partial<Pick<RuntimeStore, 'getActiveRunByAgentId'>>
+
+/** Only expose an explicitly configured model, never infer a provider default.
+ * Raw launch arguments may contain credentials and must not enter the roster. */
+export const readConfiguredModel = (args: readonly string[]): string | null => {
+  let model: string | null = null
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === '--') break
+    if (arg === '--model') {
+      const value = args[index + 1]
+      if (value && !value.startsWith('-')) {
+        model = value
+        index += 1
+      }
+    } else if (arg?.startsWith('--model=')) {
+      model = arg.slice('--model='.length) || null
+    }
+  }
+  return model
+}
 
 /**
  * Resolves the built-in command preset id for a worker. Mirrors the launch-time
@@ -25,17 +47,18 @@ export const resolveCommandPresetId = (
   if (!config) return null
   if (config.presetAugmentationDisabled) return null
   if (config.commandPresetId) return config.commandPresetId
-  const implicit = store.settings.getCommandPreset(config.command)
+  const implicitBuiltin = getBuiltinCommandPresetByCommand(config.command)
+  const implicit = store.settings.getCommandPreset(implicitBuiltin?.id ?? config.command)
   if (!implicit || implicit.command !== config.command) return null
   return implicit.id
 }
 
 /**
- * Folds the two transient signals exposed on team list payloads — last PTY
- * line (read fresh per request) and resolved command preset id (read from the
- * launch cache) — into the in-memory worker records. The records themselves
- * stay narrow (`workspace-store.listWorkers`) because the workspace store does
- * not own the launch cache; enrichment happens at the route boundary instead.
+ * Folds transient signals exposed on team list payloads — last PTY line,
+ * resolved command preset id, and startup readiness — into the in-memory
+ * worker records. The records themselves stay narrow
+ * (`workspace-store.listWorkers`) because the workspace store does not own
+ * the launch cache or live runs; enrichment happens at the route boundary.
  */
 export const enrichTeamList = (
   workspaceId: string,
@@ -46,7 +69,12 @@ export const enrichTeamList = (
     const line = store.getLastPtyLineForAgent(workspaceId, worker.id)
     const presetId = resolveCommandPresetId(store, workspaceId, worker.id)
     const next: TeamListItem = { ...worker }
+    const config = store.peekAgentLaunchConfig(workspaceId, worker.id)
+    next.configuredCommand = config?.command ?? null
+    next.configuredModel = config && presetId ? readConfiguredModel(config.args ?? []) : null
     if (line !== null) next.lastPtyLine = line
     if (presetId !== null) next.commandPresetId = presetId
+    next.startupReadyAt =
+      store.getActiveRunByAgentId?.(workspaceId, worker.id)?.startupReadyAt ?? null
     return next
   })

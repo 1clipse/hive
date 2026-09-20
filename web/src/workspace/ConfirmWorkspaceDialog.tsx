@@ -1,9 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { ChevronDown, ChevronRight, Folder, GitBranch } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, GitBranch, Play, Sliders } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { CommandPreset, FsProbeResponse } from '../api.js'
 import { useI18n } from '../i18n.js'
+import { CliInstallGuidancePanel } from './CliInstallGuidance.js'
+import { ControllerModeSelect } from './ControllerModeSelect.js'
+import { sanitizePastedPath } from './path-input.js'
 import { WorkspaceCommandPresetSelect } from './WorkspaceCommandPresetSelect.js'
 import type { WorkspaceCreateInput } from './workspace-create-input.js'
 
@@ -19,9 +22,12 @@ type ConfirmWorkspaceDialogProps = {
   onCommandPresetChange: (value: string) => void
   onCreate: (input: WorkspaceCreateInput) => void
   onOpenServerBrowse: () => void
+  /** Jumps into demo mode; surfaced as a fallback when no built-in CLI is installed. */
+  onTryDemo?: () => void
 }
 
-const basenameOf = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? ''
+const basenameOf = (path: string): string =>
+  (path.split(/[\\/]/).filter(Boolean).pop() ?? '').replace(/:$/u, '')
 
 const FieldLabel = ({ children }: { children: React.ReactNode }) => (
   <span className="text-xs font-medium uppercase tracking-wider text-ter">{children}</span>
@@ -37,6 +43,7 @@ export const ConfirmWorkspaceDialog = ({
   onCommandPresetChange,
   onCreate,
   onOpenServerBrowse,
+  onTryDemo,
 }: ConfirmWorkspaceDialogProps) => {
   const { t } = useI18n()
   const initialPath = probe?.path ?? ''
@@ -46,13 +53,16 @@ export const ConfirmWorkspaceDialog = ({
   const [pasteExpanded, setPasteExpanded] = useState(pasteFallbackDefault)
   const [startupExpanded, setStartupExpanded] = useState(false)
   const [startupCommand, setStartupCommand] = useState('')
+  const [controllerMode, setControllerMode] = useState<'internal' | 'codex_app'>('internal')
+  const externalController = controllerMode === 'codex_app'
 
   // Re-sync when the probe changes (user re-picks a folder without closing).
   useEffect(() => {
     setName(probe?.suggested_name ?? basenameOf(probe?.path ?? ''))
   }, [probe?.path, probe?.suggested_name])
 
-  const pastedClean = pastePath.trim()
+  const pastedClean = sanitizePastedPath(pastePath)
+  const pastedSuggestedName = basenameOf(pastedClean)
   const resolvedPath = pasteExpanded && pastedClean.length > 0 ? pastedClean : (probe?.path ?? '')
   const startupClean = startupCommand.trim()
   const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
@@ -64,34 +74,40 @@ export const ConfirmWorkspaceDialog = ({
     : selectedPresetUnavailable
       ? t('workspace.preset.notInstalled', { name: selectedPreset.displayName })
       : null
+  const allPresetsUnavailable =
+    commandPresets.length > 0 && commandPresets.every((preset) => preset.available === false)
   const canCreate =
     name.trim().length > 0 &&
     resolvedPath.length > 0 &&
-    !presetsLoading &&
-    !genericPresetNeedsStartup &&
-    !selectedPresetUnavailable
+    (externalController ||
+      (!presetsLoading && !genericPresetNeedsStartup && !selectedPresetUnavailable))
 
   const handleCreate = () => {
     if (!canCreate) return
     onCreate({
-      commandPresetId: commandPresetId || null,
+      ...(externalController ? { controllerMode: 'codex_app' as const } : {}),
+      commandPresetId: externalController ? null : commandPresetId || null,
       name: name.trim(),
       path: resolvedPath,
-      ...(startupClean ? { startupCommand: startupClean } : {}),
+      ...(!externalController && startupClean ? { startupCommand: startupClean } : {}),
     })
   }
+
+  useEffect(() => {
+    if (pasteExpanded && pastedClean.length > 0) setName(pastedSuggestedName)
+  }, [pasteExpanded, pastedClean, pastedSuggestedName])
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onCancel()}>
       <Dialog.Portal>
         <Dialog.Overlay
           data-testid="confirm-workspace-overlay"
-          className="app-overlay fixed inset-0 z-40"
+          className="app-overlay fixed inset-0 z-[70]"
         />
-        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+        <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center p-4">
           <Dialog.Content
             data-testid="confirm-workspace-dialog"
-            className="dialog-scale-pop elev-2 pointer-events-auto flex w-[480px] max-w-full flex-col rounded-lg border"
+            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100dvh-2rem)] w-[480px] max-w-full flex-col overflow-y-auto rounded-lg border"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
@@ -115,44 +131,62 @@ export const ConfirmWorkspaceDialog = ({
                   {t('workspace.confirm.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-ter">
-                  {t('workspace.confirm.description')}
+                  {t(
+                    externalController
+                      ? 'controller.workspaceDescription'
+                      : 'workspace.confirm.description'
+                  )}
                 </Dialog.Description>
               </div>
             </div>
 
             <div className="flex flex-col gap-4 px-5 py-4">
-              <label className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 <FieldLabel>{t('workspace.field.path')}</FieldLabel>
+                {/* Hidden input for test compatibility with getByTestId('confirm-workspace-path').toHaveValue() */}
                 <input
-                  readOnly
+                  type="hidden"
                   value={probe?.path ?? ''}
-                  placeholder={t('workspace.field.pathEmptyPlaceholder')}
-                  className="input input--readonly mono"
                   data-testid="confirm-workspace-path"
+                  readOnly
                 />
-              </label>
-
-              {probe?.is_git_repository ? (
                 <div
-                  className="flex items-center gap-2 text-xs"
-                  data-testid="confirm-workspace-git-badge"
+                  className="flex items-center justify-between gap-3 rounded-lg border p-3 transition-all"
+                  style={{
+                    background: 'var(--bg-2)',
+                    borderColor: 'var(--border)',
+                  }}
                 >
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium"
-                    style={{
-                      background: 'color-mix(in oklab, var(--status-blue) 12%, transparent)',
-                      color: 'var(--status-blue)',
-                      border: '1px solid color-mix(in oklab, var(--status-blue) 30%, transparent)',
-                    }}
-                  >
-                    <GitBranch size={12} aria-hidden />
-                    {probe.current_branch ?? t('workspace.git.detached')}
-                  </span>
-                  <span className="text-ter">{t('workspace.git.detected')}</span>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className="block truncate font-mono text-sm text-pri"
+                      title={probe?.path ?? ''}
+                    >
+                      {probe?.path || t('workspace.field.pathEmptyPlaceholder')}
+                    </span>
+                  </div>
+                  {probe?.is_git_repository ? (
+                    <div
+                      className="shrink-0 flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium"
+                      style={{
+                        background: 'color-mix(in oklab, var(--status-blue) 12%, transparent)',
+                        color: 'var(--status-blue)',
+                        border:
+                          '1px solid color-mix(in oklab, var(--status-blue) 25%, transparent)',
+                      }}
+                      data-testid="confirm-workspace-git-badge"
+                    >
+                      <GitBranch size={12} aria-hidden />
+                      <span className="truncate max-w-[90px]">
+                        {probe.current_branch ?? t('workspace.git.detached')}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : probe?.ok ? (
-                <span className="text-xs text-ter">{t('workspace.git.none')}</span>
-              ) : null}
+                {probe?.ok && !probe?.is_git_repository && (
+                  <span className="text-xs text-ter pl-1">{t('workspace.git.none')}</span>
+                )}
+              </div>
 
               <label className="flex flex-col gap-2">
                 <FieldLabel>{t('workspace.field.name')}</FieldLabel>
@@ -167,76 +201,162 @@ export const ConfirmWorkspaceDialog = ({
                 />
               </label>
 
-              <WorkspaceCommandPresetSelect
-                error={commandPresetError ?? presetAvailabilityError}
-                onChange={onCommandPresetChange}
-                presets={commandPresets}
-                value={commandPresetId}
-              />
+              <ControllerModeSelect value={controllerMode} onChange={setControllerMode} />
+              {!externalController && (
+                <WorkspaceCommandPresetSelect
+                  error={commandPresetError ?? presetAvailabilityError}
+                  onChange={onCommandPresetChange}
+                  presets={commandPresets}
+                  value={commandPresetId}
+                />
+              )}
 
-              <button
-                type="button"
-                onClick={() => setStartupExpanded((v) => !v)}
-                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
-                data-testid="confirm-workspace-startup-toggle"
-              >
-                {startupExpanded ? (
-                  <ChevronDown size={12} aria-hidden />
-                ) : (
-                  <ChevronRight size={12} aria-hidden />
-                )}
-                {t('workspace.advanced.startup')}
-              </button>
-              {startupExpanded ? (
-                <label className="flex flex-col gap-2">
-                  <FieldLabel>{t('workspace.field.startup')}</FieldLabel>
-                  <input
-                    type="text"
-                    value={startupCommand}
-                    onChange={(event) => setStartupCommand(event.target.value)}
-                    placeholder={t('workspace.field.startupPlaceholder')}
-                    className="input mono"
-                    data-testid="confirm-workspace-startup-command"
-                  />
-                  <span className="text-xs text-ter">{t('workspace.startup.hint')}</span>
-                </label>
+              {!externalController && selectedPresetUnavailable && selectedPreset ? (
+                <CliInstallGuidancePanel
+                  presetId={selectedPreset.id}
+                  presetName={selectedPreset.displayName}
+                />
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => setPasteExpanded((v) => !v)}
-                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
-                data-testid="confirm-workspace-paste-toggle"
+              <p
+                className="rounded-lg border p-3 text-xs text-sec"
+                style={{
+                  background: 'color-mix(in oklab, var(--status-yellow) 5%, transparent)',
+                  borderColor: 'color-mix(in oklab, var(--status-yellow) 25%, transparent)',
+                }}
+                data-testid="yolo-mode-notice"
               >
+                {t(externalController ? 'controller.memberPermissions' : 'workspace.yolo.notice')}
+              </p>
+
+              {!externalController && allPresetsUnavailable && onTryDemo ? (
+                <div
+                  className="flex flex-col gap-2 rounded-lg border p-3"
+                  style={{
+                    background: 'color-mix(in oklab, var(--accent) 6%, transparent)',
+                    borderColor: 'color-mix(in oklab, var(--accent) 30%, transparent)',
+                  }}
+                  data-testid="cli-none-available"
+                >
+                  <span className="text-xs text-sec">{t('workspace.preset.noneAvailable')}</span>
+                  <button
+                    type="button"
+                    onClick={onTryDemo}
+                    className="icon-btn w-full justify-center inline-flex items-center gap-2"
+                    data-testid="cli-try-demo"
+                  >
+                    <Play size={13} aria-hidden />
+                    {t('workspace.preset.tryDemo')}
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Advanced Configurations */}
+              {!externalController && (
+                <div
+                  className="mt-2 rounded-lg border overflow-hidden transition-all"
+                  style={{
+                    borderColor: 'var(--border)',
+                    background: 'var(--bg-1)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setStartupExpanded((v) => !v)}
+                    className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
+                    data-testid="confirm-workspace-startup-toggle"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sliders size={12} aria-hidden className="text-ter" />
+                      {t('workspace.advanced.startup')}
+                    </span>
+                    {startupExpanded ? (
+                      <ChevronDown size={14} aria-hidden />
+                    ) : (
+                      <ChevronRight size={14} aria-hidden />
+                    )}
+                  </button>
+                  {startupExpanded ? (
+                    <div
+                      className="flex flex-col gap-2 border-t p-3.5 transition-all"
+                      style={{
+                        background: 'var(--bg-2)',
+                        borderColor: 'var(--border)',
+                      }}
+                    >
+                      <FieldLabel>{t('workspace.field.startup')}</FieldLabel>
+                      <input
+                        type="text"
+                        value={startupCommand}
+                        onChange={(event) => setStartupCommand(event.target.value)}
+                        placeholder={t('workspace.field.startupPlaceholder')}
+                        className="input mono text-sm"
+                        data-testid="confirm-workspace-startup-command"
+                      />
+                      <span className="text-[11px] text-ter normal-case tracking-normal leading-relaxed">
+                        {t('workspace.startup.hint')}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              <div
+                className="rounded-lg border overflow-hidden transition-all"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: 'var(--bg-1)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setPasteExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
+                  data-testid="confirm-workspace-paste-toggle"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sliders size={12} aria-hidden className="text-ter" />
+                    {t('workspace.advanced.pastePath')}
+                  </span>
+                  {pasteExpanded ? (
+                    <ChevronDown size={14} aria-hidden />
+                  ) : (
+                    <ChevronRight size={14} aria-hidden />
+                  )}
+                </button>
                 {pasteExpanded ? (
-                  <ChevronDown size={12} aria-hidden />
-                ) : (
-                  <ChevronRight size={12} aria-hidden />
-                )}
-                {t('workspace.advanced.pastePath')}
-              </button>
-              {pasteExpanded ? (
-                <label className="flex flex-col gap-2">
-                  <FieldLabel>{t('workspace.field.absolutePath')}</FieldLabel>
-                  <input
-                    type="text"
-                    value={pastePath}
-                    onChange={(event) => setPastePath(event.target.value)}
-                    placeholder={t('workspace.field.absolutePathPlaceholder')}
-                    className="input mono"
-                    data-testid="confirm-workspace-paste-path"
-                  />
-                </label>
-              ) : null}
+                  <div
+                    className="flex flex-col gap-2 border-t p-3.5 transition-all"
+                    style={{
+                      background: 'var(--bg-2)',
+                      borderColor: 'var(--border)',
+                    }}
+                  >
+                    <FieldLabel>{t('workspace.field.absolutePath')}</FieldLabel>
+                    <input
+                      type="text"
+                      value={pastePath}
+                      onChange={(event) => setPastePath(event.target.value)}
+                      placeholder={t('workspace.field.absolutePathPlaceholder')}
+                      className="input mono text-sm"
+                      data-testid="confirm-workspace-paste-path"
+                    />
+                  </div>
+                ) : null}
+              </div>
 
               <button
                 type="button"
                 onClick={onOpenServerBrowse}
-                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
+                className="flex items-center justify-between w-full rounded-lg border border-dashed px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 hover:text-pri transition-all cursor-pointer"
+                style={{ borderColor: 'var(--border)' }}
                 data-testid="confirm-workspace-browse-toggle"
               >
-                <ChevronRight size={12} aria-hidden />
-                {t('workspace.advanced.browse')}
+                <span className="flex items-center gap-2">
+                  <Folder size={12} aria-hidden className="text-ter" />
+                  {t('workspace.advanced.browse')}
+                </span>
+                <ChevronRight size={14} aria-hidden />
               </button>
             </div>
 

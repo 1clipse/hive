@@ -1,34 +1,46 @@
 import type { ReactNode } from 'react'
 
+import type { VersionInfo } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { Topbar } from './Topbar.js'
 import {
-  useWorkspaceSidebarResize,
   WORKSPACE_SIDEBAR_MAX,
   WORKSPACE_SIDEBAR_MIN,
+  type WorkspaceSidebarResize,
 } from './useWorkspaceSidebarResize.js'
 
 type MainLayoutProps = {
   children: ReactNode
   hideTopbarActions?: boolean
+  memoryOpen?: boolean
+  onToggleMemory?: () => void
   onToggleTaskGraph?: () => void
   openTaskCount?: number
+  onToggleWorkflows?: () => void
+  workflowsOpen?: boolean
   sidebar: ReactNode
+  sidebarResize: WorkspaceSidebarResize
   taskGraphOpen?: boolean
   topbarActions?: ReactNode
+  versionInfo?: VersionInfo | null | undefined
 }
 
 export const MainLayout = ({
   children,
   hideTopbarActions = false,
+  memoryOpen = false,
+  onToggleMemory,
   onToggleTaskGraph,
   openTaskCount = 0,
+  onToggleWorkflows,
+  workflowsOpen = false,
   sidebar,
+  sidebarResize,
   taskGraphOpen = false,
   topbarActions,
+  versionInfo,
 }: MainLayoutProps) => {
   const { t } = useI18n()
-  const sidebarResize = useWorkspaceSidebarResize()
 
   return (
     <div
@@ -38,11 +50,16 @@ export const MainLayout = ({
       <Topbar
         actions={topbarActions}
         hideActions={hideTopbarActions}
+        memoryOpen={memoryOpen}
+        onToggleMemory={onToggleMemory}
         onToggleTaskGraph={onToggleTaskGraph}
         openTaskCount={openTaskCount}
         taskGraphOpen={taskGraphOpen}
+        onToggleWorkflows={onToggleWorkflows}
+        versionInfo={versionInfo}
+        workflowsOpen={workflowsOpen}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <aside
           aria-label={t('layout.sidebarAria')}
           className="workspace-sidebar relative flex shrink-0 flex-col"
@@ -67,7 +84,7 @@ export const MainLayout = ({
             onKeyDown={sidebarResize.onResizeKeyDown}
           />
         </aside>
-        <section className="relative flex min-w-0 flex-1">{children}</section>
+        <section className="relative flex min-w-0 flex-1 overflow-hidden">{children}</section>
       </div>
     </div>
   )

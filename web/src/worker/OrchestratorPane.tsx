@@ -1,19 +1,31 @@
 import { Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useI18n } from '../i18n.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
+import { CliInstallGuidancePanel } from '../workspace/CliInstallGuidance.js'
+
+/* The runtime error is `<command> CLI not found in PATH` where <command> is
+   the executable name; install guidance is keyed by preset id. Only one
+   built-in preset differs (cursor-agent → cursor) — keep them in sync with
+   src/server/command-preset-defaults.ts. */
+const CLI_COMMAND_TO_PRESET_ID: Record<string, string> = { 'cursor-agent': 'cursor' }
+const CLI_NOT_FOUND_PATTERN = /^(\S+) CLI not found in PATH/u
 
 export type OrchestratorPaneState =
   | { kind: 'starting' }
-  | { kind: 'running'; runId: string }
+  | {
+      hasUserInputSinceStart: boolean
+      kind: 'running'
+      runId: string
+      startupBlockedReason: 'first_run_setup' | null
+    }
   | { kind: 'stopped' }
   | { kind: 'failed'; error: string }
 
 type OrchestratorPaneProps = {
   state: OrchestratorPaneState
-  /** Kept for API stability; M6-B will surface stop via the ⌘K palette. */
-  onStop: () => void
   onRemoveWorkspace: () => void
   onStart: () => void
   onRestart: () => void
@@ -75,6 +87,7 @@ const FailedBody = ({
       })
       .catch(() => {})
   }
+  const notFoundCommand = CLI_NOT_FOUND_PATTERN.exec(error)?.[1]
   return (
     <div
       data-testid="orchestrator-failed-body"
@@ -112,6 +125,14 @@ const FailedBody = ({
           </button>
         </Tooltip>
       </div>
+      {notFoundCommand ? (
+        <div className="w-full">
+          <CliInstallGuidancePanel
+            presetId={CLI_COMMAND_TO_PRESET_ID[notFoundCommand] ?? notFoundCommand}
+            presetName={notFoundCommand}
+          />
+        </div>
+      ) : null}
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -143,27 +164,45 @@ export const OrchestratorPane = ({
   onRemoveWorkspace,
   onRestart,
   onStart,
-}: OrchestratorPaneProps) => (
-  <div
-    className="relative flex h-full w-full min-w-0 flex-col"
-    style={{
-      background: 'var(--bg-crust)',
-      borderRight: '1px solid var(--border)',
-    }}
-    data-testid="orchestrator-terminal-slot"
-  >
-    {state.kind === 'running' ? (
-      <div
-        id={`orch-pty-${state.runId}`}
-        className="flex h-full w-full"
-        data-pty-slot="orchestrator"
-      />
-    ) : state.kind === 'failed' ? (
-      <FailedBody error={state.error} onRemoveWorkspace={onRemoveWorkspace} onRestart={onRestart} />
-    ) : state.kind === 'stopped' ? (
-      <StoppedBody onStart={onStart} />
-    ) : (
-      <StartingBody />
-    )}
-  </div>
-)
+}: OrchestratorPaneProps) => {
+  const { t } = useI18n()
+  const isMobile = useIsMobile()
+  return (
+    <div
+      className="orchestrator-pane-root relative flex h-full w-full min-w-0 flex-col"
+      style={{
+        background: 'var(--bg-crust)',
+        ...(isMobile ? {} : { borderRight: '1px solid var(--border)' }),
+      }}
+      data-testid="orchestrator-terminal-slot"
+    >
+      {state.kind === 'running' ? (
+        <div
+          id={`orch-pty-${state.runId}`}
+          className="orchestrator-pty-slot relative flex h-full w-full"
+          data-pty-slot="orchestrator"
+          data-terminal-auto-focus="true"
+        >
+          {isMobile ? (
+            <div
+              className="orchestrator-pty-placeholder pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center"
+              data-testid="orchestrator-running-placeholder"
+            >
+              <div className="mono text-xs text-ter">{t('terminal.statusConnecting')}</div>
+            </div>
+          ) : null}
+        </div>
+      ) : state.kind === 'failed' ? (
+        <FailedBody
+          error={state.error}
+          onRemoveWorkspace={onRemoveWorkspace}
+          onRestart={onRestart}
+        />
+      ) : state.kind === 'stopped' ? (
+        <StoppedBody onStart={onStart} />
+      ) : (
+        <StartingBody />
+      )}
+    </div>
+  )
+}

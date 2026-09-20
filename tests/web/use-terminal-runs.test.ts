@@ -34,7 +34,7 @@ afterEach(() => {
 describe('useTerminalRuns', () => {
   test('keeps the same array reference when polling returns unchanged runs', async () => {
     vi.useFakeTimers()
-    const fetchMock = vi.fn().mockResolvedValue(json([run('running')]))
+    const fetchMock = vi.fn().mockResolvedValue(json([run('starting')]))
     vi.stubGlobal('fetch', fetchMock)
 
     const { result } = renderHook(() => useTerminalRuns('ws-1'))
@@ -58,7 +58,7 @@ describe('useTerminalRuns', () => {
     vi.useFakeTimers()
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(json([run('running')]))
+      .mockResolvedValueOnce(json([run('starting')]))
       .mockResolvedValueOnce(json([run('stopped')]))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -67,7 +67,7 @@ describe('useTerminalRuns', () => {
     await act(async () => {
       await flushPromises()
     })
-    expect(result.current[0]?.status).toBe('running')
+    expect(result.current[0]?.status).toBe('starting')
     const firstRuns = result.current
 
     await act(async () => {
@@ -77,6 +77,82 @@ describe('useTerminalRuns', () => {
 
     expect(result.current).not.toBe(firstRuns)
     expect(result.current[0]?.status).toBe('stopped')
+  })
+
+  test('slows polling when runs are idle', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue(json([run('stopped')]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() => useTerminalRuns('ws-1'))
+
+    await act(async () => {
+      await flushPromises()
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test('keeps steady polling for running terminal runs', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue(json([run('running')]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() => useTerminalRuns('ws-1'))
+
+    await act(async () => {
+      await flushPromises()
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test('returns to fast polling when an idle workspace gains a starting run', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json([run('starting')]))
+      .mockResolvedValue(json([run('starting')]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() => useTerminalRuns('ws-1'))
+
+    await act(async () => {
+      await flushPromises()
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(2500)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+      await flushPromises()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   test('does not overlap slow requests and backs off failed refreshes', async () => {
@@ -109,7 +185,7 @@ describe('useTerminalRuns', () => {
     })
 
     await act(async () => {
-      vi.advanceTimersByTime(500)
+      vi.advanceTimersByTime(2500)
       await flushPromises()
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)

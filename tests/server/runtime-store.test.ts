@@ -1,16 +1,18 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import type { AgentManager, AgentRunSnapshot } from '../../src/server/agent-manager.js'
+import { CODER_ROLE_DESCRIPTION, TESTER_ROLE_DESCRIPTION } from '../../src/server/role-templates.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
+const tinyAvatar =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const outputBus = {
   clear: () => {},
   publish: () => {},
@@ -56,7 +58,7 @@ const createFakeAgentManager = (): AgentManager => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('runtime store', () => {
@@ -93,14 +95,17 @@ describe('runtime store', () => {
     db.close()
   })
 
-  test('each workspace automatically has one orchestrator', () => {
+  test('each workspace automatically has an orchestrator and a workflow pseudo-agent', () => {
     const store = createRuntimeStore()
 
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const snapshot = store.getWorkspaceSnapshot(workspace.id)
 
-    expect(snapshot.agents).toHaveLength(1)
-    expect(snapshot.agents[0]).toMatchObject({
+    // Orchestrator + the PTY-less __workflow__ pseudo-agent (hidden from the
+    // worker roster, present for workflow dispatch identity).
+    expect(snapshot.agents).toHaveLength(2)
+    expect(snapshot.agents.map((agent) => agent.role).sort()).toEqual(['orchestrator', 'workflow'])
+    expect(snapshot.agents.find((agent) => agent.role === 'orchestrator')).toMatchObject({
       name: 'Orchestrator',
       role: 'orchestrator',
       status: 'stopped',
@@ -124,6 +129,86 @@ describe('runtime store', () => {
       status: 'stopped',
       pendingTaskCount: 0,
     })
+  })
+
+  test('can set and clear worker avatar without changing default workers', () => {
+    const store = createRuntimeStore()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+
+    const worker = store.addWorker(workspace.id, {
+      avatar: tinyAvatar,
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    expect(worker.avatar).toBe(tinyAvatar)
+    expect(store.listWorkers(workspace.id)).toContainEqual(
+      expect.objectContaining({ avatar: tinyAvatar, id: worker.id })
+    )
+
+    store.updateWorkerAvatar(workspace.id, worker.id, null)
+
+    expect(store.getWorker(workspace.id, worker.id).avatar).toBeUndefined()
+    expect(store.listWorkers(workspace.id).find((item) => item.id === worker.id)).toEqual(
+      expect.not.objectContaining({ avatar: expect.any(String) })
+    )
+  })
+
+  test('persists worker avatar across runtime store rehydration', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-worker-avatar-'))
+    tempDirs.push(dataDir)
+    const firstStore = createRuntimeStore({ dataDir })
+    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const worker = firstStore.addWorker(workspace.id, {
+      avatar: tinyAvatar,
+      name: 'Alice',
+      role: 'coder',
+    })
+    await firstStore.close()
+
+    const secondStore = createRuntimeStore({ dataDir })
+    expect(secondStore.listWorkers(workspace.id)).toContainEqual(
+      expect.objectContaining({ avatar: tinyAvatar, id: worker.id })
+    )
+    secondStore.updateWorkerAvatar(workspace.id, worker.id, null)
+    await secondStore.close()
+
+    const thirdStore = createRuntimeStore({ dataDir })
+    expect(thirdStore.listWorkers(workspace.id).find((item) => item.id === worker.id)).toEqual(
+      expect.not.objectContaining({ avatar: expect.any(String) })
+    )
+    await thirdStore.close()
+  })
+
+  test('updateWorkerProfile does not mutate memory when DB update fails', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-worker-profile-db-fail-'))
+    tempDirs.push(dataDir)
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    initializeRuntimeDatabase(db)
+    const workspaceStore = createWorkspaceStore(db, [])
+    const workspace = workspaceStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const worker = workspaceStore.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+    const originalPrepare = db.prepare.bind(db)
+    vi.spyOn(db, 'prepare').mockImplementation((source: string) => {
+      if (source.startsWith('UPDATE workers SET name = ?, avatar = ?')) {
+        throw new Error('update worker failed')
+      }
+      return originalPrepare(source)
+    })
+
+    expect(() =>
+      workspaceStore.updateWorkerProfile(workspace.id, worker.id, {
+        avatar: tinyAvatar,
+        name: 'Bob',
+      })
+    ).toThrow(/update worker failed/)
+    expect(workspaceStore.getWorker(workspace.id, worker.id)).toMatchObject({ name: 'Alice' })
+    expect(workspaceStore.getWorker(workspace.id, worker.id).avatar).toBeUndefined()
+
+    db.close()
   })
 
   test('dispatchTask increments worker pending count and marks it working', () => {
@@ -170,14 +255,14 @@ describe('runtime store', () => {
       name: 'Alice',
       role: 'coder',
     })
-    store.configureAgentLaunch(workspace.id, worker.id, { command: '/bin/bash', args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 
     expect(store.getWorker(workspace.id, worker.id).status).toBe('idle')
   })
 
-  test('startAgent resets a queued worker back to idle (status tracks activity, not backlog)', async () => {
+  test('startAgent keeps a queued worker working while backlog remains', async () => {
     const store = createRuntimeStore({ agentManager: createFakeAgentManager() })
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, {
@@ -185,23 +270,20 @@ describe('runtime store', () => {
       role: 'coder',
     })
     // Worker was running, took a dispatch (pendingTaskCount=1, status='working'),
-    // then user hit [Restart]. A fresh PTY hasn't done any work yet — the next
-    // team send is what should flip status back to 'working', not the leftover
-    // queue depth.
+    // then user hit [Restart]. Once a PTY is alive again, spec §3.6 derives
+    // worker status from the remaining pending_task_count.
     store.getWorker(workspace.id, worker.id).status = 'idle'
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.configureAgentLaunch(workspace.id, worker.id, { command: '/bin/bash', args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
-    expect(updatedWorker.status).toBe('idle')
-    // pendingTaskCount stays so WorkerModal / recovery summary can still surface
-    // the backlog — the status field just doesn't read from it anymore.
+    expect(updatedWorker.status).toBe('working')
     expect(updatedWorker.pendingTaskCount).toBe(1)
   })
 
-  test('startAgent transitions a stopped worker with pending backlog to idle (restart path)', async () => {
+  test('startAgent transitions a stopped worker with pending backlog to working', async () => {
     const store = createRuntimeStore({ agentManager: createFakeAgentManager() })
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, {
@@ -211,17 +293,17 @@ describe('runtime store', () => {
     // Simulate the hydration end-state after a hive restart: worker status is
     // 'stopped' (PTY isn't running), but dispatch ledger replay left
     // pendingTaskCount > 0 because the previous session ended before the
-    // worker reported back. User hits [Restart] -> startAgent -> must NOT
-    // auto-promote to 'working'.
+    // worker reported back. User hits [Restart] -> startAgent, so the PTY is
+    // alive and pending_task_count makes it working again.
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
     expect(store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(1)
     expect(store.getWorker(workspace.id, worker.id).status).toBe('stopped')
-    store.configureAgentLaunch(workspace.id, worker.id, { command: '/bin/bash', args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
-    expect(updatedWorker.status).toBe('idle')
+    expect(updatedWorker.status).toBe('working')
     expect(updatedWorker.pendingTaskCount).toBe(1)
   })
 
@@ -280,6 +362,7 @@ describe('runtime store', () => {
         id: expect.any(String),
         name: 'Alice',
         role: 'coder',
+        description: CODER_ROLE_DESCRIPTION,
         status: 'stopped',
         pendingTaskCount: 0,
       },
@@ -287,6 +370,7 @@ describe('runtime store', () => {
         id: expect.any(String),
         name: 'Bob',
         role: 'tester',
+        description: TESTER_ROLE_DESCRIPTION,
         status: 'stopped',
         pendingTaskCount: 0,
       },

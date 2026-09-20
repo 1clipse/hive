@@ -119,6 +119,27 @@ export const parseTaskMarkdown = (
   return root
 }
 
+export const countOpenRootTasks = (content: string): number => {
+  let openRoots = 0
+  const stack: Array<{ indent: number }> = []
+  const lines = content.split(/\r?\n/)
+  for (const rawLine of lines) {
+    if (!rawLine) continue
+    const match = rawLine.match(TASK_LINE)
+    if (!match) continue
+    const [, indentRaw = '', mark = ' '] = match
+    const indent = indentRaw.replace(/\t/g, '  ').length
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1]
+      if (top && top.indent < indent) break
+      stack.pop()
+    }
+    if (!stack[stack.length - 1] && mark.toLowerCase() !== 'x') openRoots += 1
+    stack.push({ indent })
+  }
+  return openRoots
+}
+
 /**
  * Direct-child progress for a parent task. Counts only the parent's
  * immediate `[ ]` / `[x]` children — not grandchildren, not bullets that
@@ -141,6 +162,31 @@ export const countDirectCheckboxChildren = (
   return { done, total: task.children.length }
 }
 
+/**
+ * Pick the line ending the output should use. The trap this avoids: a
+ * Windows workspace with `git config core.autocrlf=true` checks out
+ * `.hive/tasks.md` as CRLF, the helpers used to write back as LF, git
+ * smudged it back to CRLF on next checkout, and every single click on a
+ * task checkbox turned into a full-file diff. Preserving CRLF whenever
+ * the input contains *any* CRLF keeps round-trips stable.
+ */
+export const detectEol = (content: string): '\r\n' | '\n' =>
+  content.includes('\r\n') ? '\r\n' : '\n'
+
+/**
+ * Append a new top-level task to `content`, preserving the file's existing
+ * line ending. Mirrors the CRLF-preservation rule applied by the other
+ * mutation helpers so Windows + `core.autocrlf=true` workspaces don't
+ * end up with mixed-EOL `.hive/tasks.md` after the user types into the
+ * "add task" input. The caller is responsible for trimming/validating
+ * `text`; we don't sanitize here because empty/trim is a no-op upstream.
+ */
+export const appendTaskToContent = (content: string, text: string): string => {
+  const eol = detectEol(content)
+  const needsSeparator = content.length > 0 && !content.endsWith('\n')
+  return `${content}${needsSeparator ? eol : ''}- [ ] ${text}${eol}`
+}
+
 export const toggleTaskLine = (content: string, lineIndex: number): string => {
   const lines = content.split(/\r?\n/)
   const target = lines[lineIndex]
@@ -152,7 +198,7 @@ export const toggleTaskLine = (content: string, lineIndex: number): string => {
     return `${indent}- [${isChecked ? ' ' : 'x'}] ${text}`
   })
   lines[lineIndex] = next
-  return lines.join('\n')
+  return lines.join(detectEol(content))
 }
 
 /** Collapse embedded newlines into spaces so a single task line stays a
@@ -176,7 +222,7 @@ export const updateTaskTextAtLine = (
     return `${indent}- [${mark}] ${sanitized}`
   })
   lines[lineIndex] = next
-  return lines.join('\n')
+  return lines.join(detectEol(content))
 }
 
 /**
@@ -206,7 +252,7 @@ export const deleteTaskLine = (content: string, lineIndex: number): string => {
     end += 1
   }
   lines.splice(lineIndex, end - lineIndex)
-  return lines.join('\n')
+  return lines.join(detectEol(content))
 }
 
 /**
@@ -237,5 +283,5 @@ export const appendChildTaskAtLine = (content: string, lineIndex: number, text: 
   }
   const childIndent = `${parentIndentRaw}  `
   lines.splice(insertAt, 0, `${childIndent}- [ ] ${sanitized}`)
-  return lines.join('\n')
+  return lines.join(detectEol(content))
 }

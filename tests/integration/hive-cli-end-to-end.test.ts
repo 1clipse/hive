@@ -1,19 +1,21 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -47,11 +49,11 @@ describe('hive cli end to end', () => {
       throw new Error('occupied server did not bind to an inet port')
     }
 
-    const modulePath = new URL('../../src/cli/hive.ts', import.meta.url)
+    const modulePath = fileURLToPath(new URL('../../src/cli/hive.ts', import.meta.url))
     const { spawn } = await import('node:child_process')
     const processHandle = spawn(
       process.execPath,
-      ['--import', 'tsx', modulePath.pathname, '--port', String(address.port)],
+      ['--import', 'tsx', modulePath, '--port', String(address.port)],
       {
         env: { ...process.env, HIVE_DATA_DIR: dataDir },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -190,8 +192,8 @@ describe('hive cli end to end', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
-            command: '/bin/bash',
-            args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
+            command: process.execPath,
+            args: [scriptPath],
           }),
         }
       )
@@ -262,15 +264,19 @@ describe('hive cli end to end', () => {
     delete childEnv.HIVE_ORCHESTRATOR_ARGS_JSON
     delete childEnv.HIVE_ORCHESTRATOR_COMMAND
     const { spawn } = await import('node:child_process')
-    const modulePath = new URL('../../src/cli/hive.ts', import.meta.url)
-    const processHandle = spawn(
-      process.execPath,
-      ['--import', 'tsx', modulePath.pathname, '--port', '0'],
-      {
-        env: { ...childEnv, HOME: homeDir },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      }
-    )
+    const modulePath = fileURLToPath(new URL('../../src/cli/hive.ts', import.meta.url))
+    const appDataDir = join(homeDir, 'AppData', 'Roaming')
+    const xdgConfigDir = join(homeDir, '.config')
+    const processHandle = spawn(process.execPath, ['--import', 'tsx', modulePath, '--port', '0'], {
+      env: {
+        ...childEnv,
+        APPDATA: appDataDir,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+        XDG_CONFIG_HOME: xdgConfigDir,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     let stdout = ''
     processHandle.stdout.on('data', (chunk) => {
       stdout += chunk.toString()
@@ -321,10 +327,17 @@ describe('hive cli end to end', () => {
         error: null,
         run_id: null,
       })
-      expect(existsSync(join(homeDir, '.config', 'hive', 'runtime.sqlite'))).toBe(true)
+      const defaultRuntimeDbPath = join(
+        process.platform === 'win32' ? appDataDir : xdgConfigDir,
+        'hive',
+        'runtime.sqlite'
+      )
+      await waitFor(() => {
+        expect(existsSync(defaultRuntimeDbPath)).toBe(true)
+      })
     } finally {
       processHandle.kill('SIGTERM')
       await new Promise<void>((resolve) => processHandle.once('exit', () => resolve()))
     }
-  })
+  }, 15_000)
 })

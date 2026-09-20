@@ -2,6 +2,7 @@ import { serializeDispatchRecord } from './dispatch-ledger-serializer.js'
 import type { DispatchStatus } from './dispatch-ledger-store.js'
 import { getRequiredParam, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
+import { serializeDispatchMessage } from './routes-team-messages.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 
 const DISPATCH_STATUSES = new Set<DispatchStatus>(['queued', 'submitted', 'reported', 'cancelled'])
@@ -34,6 +35,72 @@ const isDispatchStatus = (value: string): value is DispatchStatus =>
 export const dispatchRoutes: RouteDefinition[] = [
   route(
     'GET',
+    '/api/ui/workspaces/:workspaceId/dispatches/:dispatchId/messages',
+    ({ params, request, response, store }) => {
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+      const workspaceId = getRequiredParam(
+        response,
+        params,
+        'workspaceId',
+        'Workspace id is required'
+      )
+      const dispatchId = getRequiredParam(response, params, 'dispatchId', 'Dispatch id is required')
+      if (!workspaceId || !dispatchId) return
+      if (!store.listWorkspaces().some((workspace) => workspace.id === workspaceId)) {
+        sendJson(response, 404, { error: 'Workspace not found' })
+        return
+      }
+      const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+      if (url.searchParams.get('scope') === 'collaboration') {
+        const afterMessageId = url.searchParams.get('after_message_id') ?? undefined
+        const collaboration = store.getDispatchCollaboration(workspaceId, dispatchId)
+        const messages = store.listCollaborationMessageHistory(
+          workspaceId,
+          dispatchId,
+          afterMessageId,
+          MAX_DISPATCH_LIMIT + 1
+        )
+        const page = messages.slice(0, MAX_DISPATCH_LIMIT)
+        sendJson(response, 200, {
+          root_dispatch_id: collaboration.rootDispatchId,
+          related_dispatches: collaboration.relatedDispatches.map((dispatch) => ({
+            id: dispatch.id,
+            parent_dispatch_id: dispatch.parentDispatchId,
+            root_dispatch_id: dispatch.rootDispatchId,
+            to_agent_id: dispatch.toAgentId,
+            owner_name: dispatch.ownerName,
+            state: dispatch.state,
+            text: dispatch.text,
+          })),
+          messages: page.map(serializeDispatchMessage),
+          next_after_message_id: messages.length > page.length ? page.at(-1)?.id : null,
+        })
+        return
+      }
+
+      const afterSeq = readBoundedInt(
+        response,
+        url.searchParams.get('after_seq'),
+        'after_seq',
+        0,
+        Number.MAX_SAFE_INTEGER
+      )
+      if (afterSeq === null) return
+      const messages = store.listDispatchMessageHistory(
+        workspaceId,
+        dispatchId,
+        afterSeq,
+        MAX_DISPATCH_LIMIT + 1
+      )
+      const page = messages.slice(0, MAX_DISPATCH_LIMIT)
+      sendJson(response, 200, {
+        messages: page.map(serializeDispatchMessage),
+        next_after_seq: messages.length > page.length ? page.at(-1)?.sequence : null,
+      })
+    }
+  ),
+  route(
+    'GET',
     '/api/ui/workspaces/:workspaceId/dispatches',
     ({ params, request, response, store }) => {
       const workspaceId = getRequiredParam(
@@ -46,7 +113,7 @@ export const dispatchRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(request, store.validateUiToken)
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
       const url = new URL(request.url ?? '/', 'http://127.0.0.1')
       if (url.searchParams.has('status')) {
         sendJson(response, 400, { error: 'Use state instead of status for dispatch filtering' })
@@ -75,10 +142,28 @@ export const dispatchRoutes: RouteDefinition[] = [
         MAX_DISPATCH_OFFSET
       )
       if (offset === null) return
+      const hasReportedSince = url.searchParams.has('reported_since')
+      if (hasReportedSince && state !== 'reported') {
+        sendJson(response, 400, { error: 'reported_since requires state=reported' })
+        return
+      }
+      const reportedSince = hasReportedSince
+        ? readBoundedInt(
+            response,
+            url.searchParams.get('reported_since'),
+            'reported_since',
+            0,
+            Number.MAX_SAFE_INTEGER
+          )
+        : undefined
+      if (reportedSince === null) return
+      response.setHeader('x-hive-snapshot-ms', String(Date.now()))
+
       const options = {
         limit,
         offset,
         ...(state ? { status: state } : {}),
+        ...(reportedSince !== undefined ? { reportedSince } : {}),
       }
       sendJson(
         response,

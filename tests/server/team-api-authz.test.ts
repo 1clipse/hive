@@ -1,28 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { CODER_ROLE_DESCRIPTION } from '../../src/server/role-templates.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
-
-const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
-  const deadline = Date.now() + timeoutMs
-  let lastError: unknown
-  while (Date.now() <= deadline) {
-    try {
-      assertion()
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
-    }
-  }
-  throw lastError
-}
+const tinyAvatar =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 
 interface HiveContext {
   baseUrl: string
@@ -56,7 +43,7 @@ const setupHive = async (): Promise<HiveContext> => {
   const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie: uiCookie },
-    body: JSON.stringify({ name: 'Alice', role: 'coder' }),
+    body: JSON.stringify({ avatar: tinyAvatar, name: 'Alice', role: 'coder' }),
   })
   const worker = (await workerResponse.json()) as { id: string; name: string }
 
@@ -65,15 +52,19 @@ const setupHive = async (): Promise<HiveContext> => {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({
-        command: '/bin/bash',
-        args: ['-lc', `"${process.execPath}" "${passiveScript}"`],
+        command: process.execPath,
+        args: [passiveScript],
       }),
     })
-    await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/start`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: uiCookie },
-      body: JSON.stringify({ hive_port: String(hive.port) }),
-    })
+    const startResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ hive_port: String(hive.port) }),
+      }
+    )
+    expect(startResponse.status).toBe(201)
   }
 
   return {
@@ -87,7 +78,7 @@ const setupHive = async (): Promise<HiveContext> => {
 
 afterEach(async () => {
   delete process.env.HIVE_DATA_DIR
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('team API authz (R1.4)', () => {
@@ -201,8 +192,12 @@ describe('team API authz (R1.4)', () => {
       await expect(response.json()).resolves.toEqual([
         {
           command_preset_id: null,
+          configured_command: process.execPath,
+          configured_model: null,
+          description: CODER_ROLE_DESCRIPTION,
           id: ctx.worker.id,
           last_pty_line: null,
+          startup_ready_at: expect.any(Number),
           name: 'Alice',
           pending_task_count: 0,
           role: 'coder',
@@ -286,7 +281,7 @@ describe('team API authz (R1.4)', () => {
     } finally {
       await ctxA.hive.close()
     }
-  })
+  }, 15000)
 
   test('worker reporting with its own token succeeds (202) and decrements pending count', async () => {
     const ctx = await setupHive()
@@ -326,7 +321,68 @@ describe('team API authz (R1.4)', () => {
         }),
       })
       expect(response.status).toBe(202)
+      await expect(response.json()).resolves.toMatchObject({
+        delivery_state: 'delivering',
+        forward_error: null,
+        forwarded: false,
+        ok: true,
+      })
       expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
+  test('worker report rejects an invalid status without recording the report', async () => {
+    const ctx = await setupHive()
+    try {
+      const orchToken = ctx.hive.store.peekAgentToken(ctx.orchestratorId)
+      if (!orchToken) {
+        throw new Error('Expected orchestrator token after start')
+      }
+      await fetch(`${ctx.baseUrl}/api/team/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.orchestratorId,
+          token: orchToken,
+          to: 'Alice',
+          text: 'task A',
+        }),
+      })
+      expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(1)
+
+      const workerToken = ctx.hive.store.peekAgentToken(ctx.worker.id)
+      if (!workerToken) {
+        throw new Error('Expected worker token after start')
+      }
+      const response = await fetch(`${ctx.baseUrl}/api/team/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.worker.id,
+          token: workerToken,
+          result: 'done',
+          status: 'maybe',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({
+        error: 'Invalid status; expected success or failed',
+      })
+      expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(1)
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
+        expect.objectContaining({ status: 'submitted', text: 'task A' })
+      )
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'report')
+      ).toEqual([])
     } finally {
       await ctx.hive.close()
     }
@@ -354,7 +410,9 @@ describe('team API authz (R1.4)', () => {
 
       expect(response.status).toBe(409)
       await expect(response.json()).resolves.toEqual({
-        error: 'No open dispatch for worker: Alice',
+        error:
+          'No open dispatch for worker: Alice. Nothing is awaiting your report — ' +
+          'if you have progress or standby info to share, use `team status "<state>"` instead.',
       })
       expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
       expect(
@@ -439,9 +497,10 @@ describe('team API authz (R1.4)', () => {
 
       expect(response.status).toBe(202)
       await expect(response.json()).resolves.toEqual({
+        delivery_state: 'delivering',
         dispatch_id: null,
         forward_error: null,
-        forwarded: true,
+        forwarded: false,
         ok: true,
       })
       expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
@@ -517,7 +576,9 @@ describe('team API authz (R1.4)', () => {
 
       expect(response.status).toBe(409)
       await expect(response.json()).resolves.toEqual({
-        error: 'No open dispatch for worker: Alice',
+        error:
+          'No open dispatch for worker: Alice. Nothing is awaiting your report — ' +
+          'if you have progress or standby info to share, use `team status "<state>"` instead.',
       })
       expect(
         ctx.hive.store
@@ -558,7 +619,7 @@ describe('team API authz (R1.4)', () => {
     }
   })
 
-  test('team send auto-start uses runtime socket port instead of client hive_port', async () => {
+  test('team send queues a stopped worker without auto-starting it', async () => {
     const ctx = await setupHive()
     try {
       const uiCookie = await getUiCookie(ctx.baseUrl)
@@ -609,10 +670,35 @@ describe('team API authz (R1.4)', () => {
       })
 
       expect(response.status).toBe(202)
-      await waitFor(() => {
-        expect(existsSync(portFile)).toBe(true)
-        expect(readFileSync(portFile, 'utf8')).toBe(String(ctx.hive.port))
+      // #33: a parked dispatch is no longer silent — the orchestrator is told
+      // it queued for a stopped worker (replay delivers it on the next start).
+      const sent = (await response.json()) as { dispatch_id: string }
+      expect(sent).toEqual({
+        dispatch_id: expect.any(String),
+        parent_dispatch_id: null,
+        root_dispatch_id: sent.dispatch_id,
+        ok: true,
+        restarted_worker: false,
+        queued: true,
+        worker_status: 'stopped',
       })
+      expect(existsSync(portFile)).toBe(false)
+      expect(
+        ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, stoppedWorker.id)
+      ).toBeUndefined()
+      expect(ctx.hive.store.getWorker(ctx.workspaceId, stoppedWorker.id)).toEqual(
+        expect.objectContaining({
+          pendingTaskCount: 1,
+          status: 'stopped',
+        })
+      )
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
+        expect.objectContaining({
+          status: 'queued',
+          text: 'start with correct port',
+          toAgentId: stoppedWorker.id,
+        })
+      )
     } finally {
       await ctx.hive.close()
     }

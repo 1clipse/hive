@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import WebSocket from 'ws'
 
 import { getWorkspaceShellAgentId } from '../../src/server/workspace-shell-runtime.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -49,7 +50,7 @@ afterEach(() => {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
   }
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 const setEnv = (key: string, value: string | undefined) => {
@@ -120,9 +121,16 @@ describe('workspace shell terminal', () => {
     tempDirs.push(workspacePath)
     tempDirs.push(binDir)
     const fakeShell = join(binDir, 'fake-shell')
-    writeFileSync(fakeShell, ['#!/bin/sh', 'echo shell exiting', 'exit 0'].join('\n'))
-    chmodSync(fakeShell, 0o755)
-    setEnv('SHELL', fakeShell)
+    const sendExitAfterStart = process.platform === 'win32'
+    if (process.platform === 'win32') {
+      // Real Windows shells are launched through ComSpec=cmd.exe. Keep that
+      // shape and ask the shell to exit after it starts, so this still covers
+      // the PTY onExit cleanup path without pretending a .cmd file is cmd.exe.
+    } else {
+      writeFileSync(fakeShell, ['#!/bin/sh', 'echo shell exiting', 'exit 0'].join('\n'))
+      chmodSync(fakeShell, 0o755)
+      setEnv('SHELL', fakeShell)
+    }
     const server = await startTestServer()
 
     try {
@@ -146,6 +154,7 @@ describe('workspace shell terminal', () => {
       expect(startResponse.status).toBe(201)
       const shell = (await startResponse.json()) as { agent_name: string; run_id: string }
       expect(shell.agent_name).toBe('Shell')
+      if (sendExitAfterStart) server.store.writeRunInput(shell.run_id, 'exit\r')
 
       await waitFor(async () => {
         const runsResponse = await fetch(
@@ -155,7 +164,7 @@ describe('workspace shell terminal', () => {
         expect(runsResponse.status).toBe(200)
         const runs = (await runsResponse.json()) as Array<{ run_id: string }>
         expect(runs).not.toContainEqual(expect.objectContaining({ run_id: shell.run_id }))
-      })
+      }, 8000)
     } finally {
       await server.close()
     }

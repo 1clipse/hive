@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
+import { isStandalonePwa } from './pwa/is-standalone.js'
 import { useGlobalShortcuts } from './useGlobalShortcuts.js'
 
 type UseAppShortcutsOptions = {
@@ -17,6 +18,15 @@ export const useAppShortcuts = ({
   workspaces,
 }: UseAppShortcutsOptions) => {
   const shortcuts = useMemo(() => {
+    // These bindings collide with OS-reserved browser shortcuts in a
+    // regular tab — Ctrl+Shift+N opens an incognito window, Ctrl+1..9
+    // switches the browser's own tabs — and the page cannot reliably
+    // preventDefault them there. Inside an installed PWA window the
+    // browser drops those bindings, so the shortcuts work as intended.
+    // Skip registration outside of standalone mode rather than ship a
+    // half-working override that varies by platform and browser.
+    if (!isStandalonePwa()) return []
+
     const indexShortcuts = (workspaces ?? []).slice(0, 9).map((ws, idx) => ({
       key: String(idx + 1),
       mod: true,

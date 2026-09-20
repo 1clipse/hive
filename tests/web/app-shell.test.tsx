@@ -77,9 +77,14 @@ describe('app shell with real server', () => {
     expect(screen.queryByTestId('add-workspace-dialog')).toBeNull()
     expect(fetchCalls).not.toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
-    const confirm = await screen.findByTestId('confirm-workspace-dialog')
-    expect(within(confirm).getByTestId('confirm-workspace-create')).toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar-empty-compact-add')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
+    const confirmDialog = await screen.findByTestId('confirm-workspace-dialog')
+    expect(within(confirmDialog).getByTestId('confirm-workspace-create')).toBeInTheDocument()
+    expect(within(confirmDialog).getByTestId('confirm-workspace-path')).toHaveValue(
+      join(sandboxRoot, 'placeholder')
+    )
+    expect(fetchCalls).toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
 
     // Radix Dialog locks the rest of the tree (aria-hidden) — query with
     // `hidden: true` so testing-library traverses past the inert node.
@@ -87,8 +92,9 @@ describe('app shell with real server', () => {
       name: 'Workspace sidebar',
       hidden: true,
     })
-    expect(sidebar).toHaveStyle({ width: '256px' })
+    expect(sidebar).toHaveStyle({ width: '56px' })
     expect(sidebar.closest('.h-screen')).toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar-empty-compact-add')).toBeNull()
     expect(screen.queryByRole('contentinfo', { hidden: true })).toBeNull()
   })
 
@@ -99,6 +105,7 @@ describe('app shell with real server', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
     expect(await screen.findByTestId('confirm-workspace-dialog')).toBeInTheDocument()
+    expect(fetchCalls).toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
   })
 
   test('workspace create failure keeps dialog open and surfaces error toast', async () => {
@@ -124,12 +131,12 @@ describe('app shell with real server', () => {
     render(<App />)
     await screen.findByTestId('welcome-pane')
     fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
-    const confirm = await screen.findByTestId('confirm-workspace-dialog')
-    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
-    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+    const confirmDialog = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.click(within(confirmDialog).getByTestId('confirm-workspace-startup-toggle'))
+    fireEvent.change(within(confirmDialog).getByTestId('confirm-workspace-startup-command'), {
       target: { value: `${process.execPath} -e "process.stdin.resume()"` },
     })
-    const createButton = within(confirm).getByTestId('confirm-workspace-create')
+    const createButton = within(confirmDialog).getByTestId('confirm-workspace-create')
     await waitFor(() => expect(createButton).toBeEnabled(), { timeout: 15000 })
     fireEvent.click(createButton)
 
@@ -164,14 +171,18 @@ describe('app shell with real server', () => {
     render(<App />)
 
     const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
-    expect(sidebar).toHaveStyle({ width: '256px' })
+    expect(sidebar).toHaveStyle({ width: '56px' })
     expect(screen.getByTestId('workspace-sidebar-title')).toHaveTextContent('Workspaces')
-    expect(screen.queryByRole('button', { name: 'Collapse workspace sidebar' })).toBeNull()
+    // At the collapsed default the toggle offers to expand, and dragging still works.
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
 
     const separator = screen.getByRole('separator', { name: 'Resize Workspace sidebar' })
-    expect(separator).toHaveAttribute('aria-valuenow', '256')
+    expect(separator).toHaveAttribute('aria-valuenow', '56')
 
-    fireEvent.mouseDown(separator, { clientX: 256 })
+    fireEvent.mouseDown(separator, { clientX: 56 })
     fireEvent.mouseMove(document, { clientX: 280 })
 
     expect(sidebar).toHaveStyle({ width: '280px' })
@@ -182,5 +193,26 @@ describe('app shell with real server', () => {
 
     expect(sidebar).toHaveStyle({ width: '264px' })
     expect(separator).toHaveAttribute('aria-valuenow', '264')
+  })
+
+  test('workspace sidebar toggle snaps between the collapsed and expanded presets', async () => {
+    render(<App />)
+
+    const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
+    expect(sidebar).toHaveStyle({ width: '56px' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
+    expect(sidebar).toHaveStyle({ width: '240px' })
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+    expect(sidebar).toHaveStyle({ width: '56px' })
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
   })
 })

@@ -1,8 +1,8 @@
 {
   "source": {
     "repo": "msitarzewski/agency-agents",
-    "commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
-    "fetched_at": "2026-05-22T12:26:20.089Z"
+    "commit": "00fb28a4cf60a719363dce0de67fafc6301857ce",
+    "fetched_at": "2026-07-13T13:18:00.935Z"
   },
   "language": "en",
   "categories": [
@@ -11,12 +11,15 @@
     "engineering",
     "finance",
     "game-development",
+    "gis",
+    "healthcare",
     "integrations",
     "marketing",
     "paid-media",
     "product",
     "project-management",
     "sales",
+    "security",
     "spatial-computing",
     "specialized",
     "support",
@@ -74,6 +77,16 @@
       "vibe": "People don't do things for no reason — I find the reason"
     },
     {
+      "path": "academic/academic-statistician.md",
+      "category": "academic",
+      "name": "Statistician",
+      "nameOverflows": false,
+      "description": "Expert in quantitative research methodology, experimental design, and statistical inference — pressure-tests claims, designs sound studies, and separates real signal from noise, chance, and bias",
+      "emoji": "📊",
+      "color": "#8B5CF6",
+      "vibe": "The plural of anecdote is not data, and a p-value is not a proof — show me the design"
+    },
+    {
       "path": "design/design-brand-guardian.md",
       "category": "design",
       "name": "Brand Guardian",
@@ -102,6 +115,16 @@
       "emoji": "🌈",
       "color": "#4DB6AC",
       "vibe": "Defeats systemic AI biases to generate culturally accurate, affirming imagery."
+    },
+    {
+      "path": "design/design-persona-walkthrough.md",
+      "category": "design",
+      "name": "Persona Walkthrough Specialist",
+      "nameOverflows": true,
+      "description": "Simulate cognitive walkthroughs of web pages from a defined persona's psychological perspective — captures emotional reactions and rational thought at each scroll position, then delivers structured CRO reports grounded in LIFT, Cialdini, and Fogg frameworks",
+      "emoji": "🎭",
+      "color": "#10B981",
+      "vibe": "I become your user so you can see what your analytics can't show you."
     },
     {
       "path": "design/design-ui-designer.md",
@@ -172,6 +195,16 @@
       "emoji": "🤖",
       "color": "blue",
       "vibe": "Turns ML models into production features that actually scale."
+    },
+    {
+      "path": "engineering/engineering-api-platform-engineer.md",
+      "category": "engineering",
+      "name": "API Platform Engineer",
+      "nameOverflows": false,
+      "description": "Expert API platform engineer for public and partner APIs — contract-first design (OpenAPI/gRPC), versioning and deprecation policy, SDK generation, API gateway concerns (auth, rate limiting, quotas), and developer-portal DX.",
+      "emoji": "🔌",
+      "color": "#0D9488",
+      "vibe": "A public API is a promise you can't take back. Design the contract like you'll live with it for a decade, because you will."
     },
     {
       "path": "engineering/engineering-autonomous-optimization-architect.md",
@@ -245,6 +278,16 @@
       "vibe": "Indexes, query plans, and schema design — databases that don't wake you at 3am."
     },
     {
+      "path": "engineering/engineering-desktop-app-engineer.md",
+      "category": "engineering",
+      "name": "Desktop App Engineer",
+      "nameOverflows": false,
+      "description": "Expert desktop application engineer for Electron and Tauri — secure IPC and process isolation, code signing and notarization, auto-update pipelines, native OS integration, and resource-footprint discipline.",
+      "emoji": "💻",
+      "color": "#475569",
+      "vibe": "The web is your UI, the OS is your API. Small binaries, locked-down IPC, and updates that never brick anyone."
+    },
+    {
       "path": "engineering/engineering-devops-automator.md",
       "category": "engineering",
       "name": "DevOps Automator",
@@ -253,6 +296,26 @@
       "emoji": "⚙️",
       "color": "orange",
       "vibe": "Automates infrastructure so your team ships faster and sleeps better."
+    },
+    {
+      "path": "engineering/engineering-drupal-performance.md",
+      "category": "engineering",
+      "name": "Drupal Performance Engineer",
+      "nameOverflows": true,
+      "description": "Expert Drupal 10/11 performance engineer specializing in Core Web Vitals, render and dynamic page caching, BigPipe, cache tags and contexts, database query and Views optimization, CSS/JS aggregation, responsive images and lazy loading, CDN integration, and opcache/PHP-FPM tuning for fast, audit-passing sites",
+      "emoji": "⚡",
+      "color": "blue",
+      "vibe": null
+    },
+    {
+      "path": "engineering/engineering-drupal-shopping-cart.md",
+      "category": "engineering",
+      "name": "Drupal Shopping Cart Engineer",
+      "nameOverflows": true,
+      "description": "Expert Drupal e-commerce engineer specializing in Drupal Commerce for product catalog management, payment gateway integration, checkout workflow design, order management, tax and promotion configuration, and high-reliability storefront delivery on Drupal 10/11",
+      "emoji": "🛒",
+      "color": "blue",
+      "vibe": null
     },
     {
       "path": "engineering/engineering-email-intelligence-engineer.md",
@@ -295,6 +358,16 @@
       "vibe": "Pragmatic perfectionist — streamlines complex admin environments."
     },
     {
+      "path": "engineering/engineering-finops-engineer.md",
+      "category": "engineering",
+      "name": "FinOps Engineer",
+      "nameOverflows": false,
+      "description": "Expert cloud cost engineer for AWS/GCP/Azure — cost allocation and tagging, rightsizing, commitment planning (reserved instances/savings plans), egress and storage optimization, and unit-economics dashboards that tie spend to business value.",
+      "emoji": "💰",
+      "color": "#0891B2",
+      "vibe": "Expert cloud cost engineer for AWS/GCP/Azure"
+    },
+    {
       "path": "engineering/engineering-frontend-developer.md",
       "category": "engineering",
       "name": "Frontend Developer",
@@ -315,6 +388,26 @@
       "vibe": "Clean history, atomic commits, and branches that tell a story."
     },
     {
+      "path": "engineering/engineering-i18n-engineer.md",
+      "category": "engineering",
+      "name": "Internationalization Engineer",
+      "nameOverflows": true,
+      "description": "Expert i18n engineer for ICU MessageFormat, CLDR plural rules, RTL and bidirectional layouts, locale-aware date/number/currency formatting, string extraction pipelines, and pseudo-localization testing.",
+      "emoji": "🌍",
+      "color": "#0EA5E9",
+      "vibe": "Hardcoded strings are bugs. If it only works in English, it only almost works."
+    },
+    {
+      "path": "engineering/engineering-identity-access-engineer.md",
+      "category": "engineering",
+      "name": "Identity & Access Engineer",
+      "nameOverflows": true,
+      "description": "Expert identity engineer for OAuth 2.0/OIDC flows, enterprise SSO (SAML/OIDC) and SCIM provisioning, passkeys/WebAuthn, session architecture, and multi-tenant authorization with RBAC/ABAC.",
+      "emoji": "🔐",
+      "color": "#7C3AED",
+      "vibe": "Nobody praises login until it breaks, leaks, or locks out the CEO during the board demo. Standards over cleverness, always."
+    },
+    {
       "path": "engineering/engineering-incident-response-commander.md",
       "category": "engineering",
       "name": "Incident Response Commander",
@@ -323,6 +416,16 @@
       "emoji": "🚨",
       "color": "#e63946",
       "vibe": "Turns production chaos into structured resolution."
+    },
+    {
+      "path": "engineering/engineering-it-service-manager.md",
+      "category": "engineering",
+      "name": "IT Service Manager",
+      "nameOverflows": false,
+      "description": "Expert IT service management specialist using ITIL 4 framework for service catalog design, incident and problem management, change control, SLA governance, CMDB maintenance, and continual service improvement — ensuring IT delivers reliable, measurable business value across any organization size",
+      "emoji": "🖧",
+      "color": "blue",
+      "vibe": null
     },
     {
       "path": "engineering/engineering-minimal-change-engineer.md",
@@ -345,6 +448,66 @@
       "vibe": "Ships native-quality apps on iOS and Android, fast."
     },
     {
+      "path": "engineering/engineering-mobile-release-engineer.md",
+      "category": "engineering",
+      "name": "Mobile Release Engineer",
+      "nameOverflows": true,
+      "description": "Expert mobile release and distribution engineer for iOS and Android — code signing, provisioning, fastlane pipelines, App Store Connect and Play Console submission, phased rollouts, and crash-triaged release health.",
+      "emoji": "🚀",
+      "color": "#16A34A",
+      "vibe": "Building the app is half the job. Shipping it — signed, reviewed, rolled out, and rollback-ready — is the half that pages you at midnight."
+    },
+    {
+      "path": "engineering/engineering-multi-agent-systems-architect.md",
+      "category": "engineering",
+      "name": "Multi-Agent Systems Architect",
+      "nameOverflows": true,
+      "description": "Systems architect specializing in the design, coordination, and governance of multi-agent AI pipelines — covering topology selection, context management, inter-agent trust, failure recovery, human-in-the-loop gating, and observability for production-grade agent systems.",
+      "emoji": "🕸️",
+      "color": "cyan",
+      "vibe": "Systems architect specializing in the design, coordination, and governance of multi-agent AI pipelines"
+    },
+    {
+      "path": "engineering/engineering-network-engineer.md",
+      "category": "engineering",
+      "name": "Network Engineer",
+      "nameOverflows": false,
+      "description": "Expert network engineer for Cisco IOS/IOS-XE, Cisco ASA/FTD, Juniper Junos, and Palo Alto PAN-OS routing, switching, firewalling, and troubleshooting.",
+      "emoji": "🌐",
+      "color": "#008c95",
+      "vibe": "Packets do not care about intent. Verify the path, prove the state, then change the config."
+    },
+    {
+      "path": "engineering/engineering-orgscript-engineer.md",
+      "category": "engineering",
+      "name": "OrgScript Engineer",
+      "nameOverflows": false,
+      "description": "Expert in designing, parsing, and implementing OrgScript grammar, AST validation, and business logic definitions.",
+      "emoji": "📜",
+      "color": "green",
+      "vibe": "Process-oriented, strict on semantics, focused on turning human processes into AI-friendly logic."
+    },
+    {
+      "path": "engineering/engineering-payments-billing-engineer.md",
+      "category": "engineering",
+      "name": "Payments & Billing Engineer",
+      "nameOverflows": true,
+      "description": "Expert payments engineer for PSP integrations (Stripe, Adyen, Braintree, PayPal), idempotent payment flows, webhook processing, subscription billing, SCA/3DS, PCI scope reduction, and financial reconciliation.",
+      "emoji": "💳",
+      "color": "#2E7D32",
+      "vibe": "Money moves exactly once, or not at all. Idempotency first, webhooks as truth, reconciliation always."
+    },
+    {
+      "path": "engineering/engineering-prompt-engineer.md",
+      "category": "engineering",
+      "name": "Prompt Engineer",
+      "nameOverflows": false,
+      "description": "Specialist in crafting, testing, and systematically optimizing prompts for LLMs — turning vague instructions into reliable, production-grade AI behaviors.",
+      "emoji": "🧬",
+      "color": "violet",
+      "vibe": "I don't write prompts, I write contracts between humans and models."
+    },
+    {
       "path": "engineering/engineering-rapid-prototyper.md",
       "category": "engineering",
       "name": "Rapid Prototyper",
@@ -355,14 +518,34 @@
       "vibe": "Turns an idea into a working prototype before the meeting's over."
     },
     {
-      "path": "engineering/engineering-security-engineer.md",
+      "path": "engineering/engineering-realtime-collaboration-engineer.md",
       "category": "engineering",
-      "name": "Security Engineer",
-      "nameOverflows": false,
-      "description": "Expert application security engineer specializing in threat modeling, vulnerability assessment, secure code review, security architecture design, and incident response for modern web, API, and cloud-native applications.",
-      "emoji": "🔒",
-      "color": "red",
-      "vibe": "Models threats, reviews code, hunts vulnerabilities, and designs security architecture that actually holds under adversarial pressure."
+      "name": "Realtime Collaboration Engineer",
+      "nameOverflows": true,
+      "description": "Expert realtime systems engineer for WebSocket/SSE infrastructure, presence, CRDT and OT-based collaborative editing, offline-first sync engines, and fan-out scaling with reconnect-safe protocols.",
+      "emoji": "🤝",
+      "color": "#E11D48",
+      "vibe": "Every keystroke is a distributed system. Converge, don't collide — and assume the network just dropped."
+    },
+    {
+      "path": "engineering/engineering-search-relevance-engineer.md",
+      "category": "engineering",
+      "name": "Search Relevance Engineer",
+      "nameOverflows": true,
+      "description": "Expert search engineer for Elasticsearch and OpenSearch — index and analyzer design, BM25 query tuning, hybrid lexical+vector retrieval, and judgment-based relevance evaluation with nDCG and online experiments.",
+      "emoji": "🔎",
+      "color": "#00BFB3",
+      "vibe": "Recall finds it, precision ranks it, evaluation proves it. Untested relevance changes are just vibes with a deploy button."
+    },
+    {
+      "path": "engineering/engineering-section-508-specialist.md",
+      "category": "engineering",
+      "name": "Section 508 Accessibility Specialist",
+      "nameOverflows": true,
+      "description": "Expert U.S. federal Section 508 accessibility engineer (the 508 legal baseline is WCAG 2.0 Level AA; WCAG 2.1/2.2 AA are recommended best practice, and ADA Title II requires WCAG 2.1 AA for state/local government) specializing in accessible web development, ARIA implementation, screen reader testing (JAWS/NVDA/VoiceOver), keyboard navigation, color contrast, accessible forms and PDFs, VPAT/ACR authoring, automated and manual auditing (axe/WAVE/Lighthouse), and remediation for government and enterprise sites",
+      "emoji": "♿",
+      "color": "blue",
+      "vibe": null
     },
     {
       "path": "engineering/engineering-senior-developer.md",
@@ -415,14 +598,24 @@
       "vibe": "Writes the docs that developers actually read and use."
     },
     {
-      "path": "engineering/engineering-threat-detection-engineer.md",
+      "path": "engineering/engineering-uswds-developer.md",
       "category": "engineering",
-      "name": "Threat Detection Engineer",
+      "name": "USWDS Developer",
+      "nameOverflows": false,
+      "description": "Expert U.S. Web Design System frontend developer specializing in USWDS components and design tokens, accessible-by-default patterns, responsive government UI, Sass settings/theming, the federal design language, integration into CMS platforms (Drupal/WordPress), and compliance with 21st Century IDEA and the Federal Website Standards",
+      "emoji": "🏛️",
+      "color": "blue",
+      "vibe": null
+    },
+    {
+      "path": "engineering/engineering-video-streaming-engineer.md",
+      "category": "engineering",
+      "name": "Video Streaming Engineer",
       "nameOverflows": true,
-      "description": "Expert detection engineer specializing in SIEM rule development, MITRE ATT&CK coverage mapping, threat hunting, alert tuning, and detection-as-code pipelines for security operations teams.",
-      "emoji": "🎯",
-      "color": "#7b2d8e",
-      "vibe": "Builds the detection layer that catches attackers after they bypass prevention."
+      "description": "Expert video streaming engineer for adaptive bitrate delivery — HLS/DASH packaging, ffmpeg transcode ladders, CMAF low-latency, DRM, CDN delivery, and QoE-driven player tuning.",
+      "emoji": "🎬",
+      "color": "#DC2626",
+      "vibe": "Every buffering spinner is a user leaving. Encode once, adapt to every network, measure the rebuffer."
     },
     {
       "path": "engineering/engineering-voice-ai-integration-engineer.md",
@@ -435,6 +628,16 @@
       "vibe": "Turns raw audio into structured, production-ready text that machines and humans can actually use."
     },
     {
+      "path": "engineering/engineering-webassembly-engineer.md",
+      "category": "engineering",
+      "name": "WebAssembly Engineer",
+      "nameOverflows": false,
+      "description": "Expert WebAssembly engineer — compiling Rust/C++/Go to Wasm, JS interop and the boundary marshalling cost, WASI and server-side runtimes (Wasmtime/Wasmer), the component model, and near-native performance tuning.",
+      "emoji": "🧩",
+      "color": "#6D28D9",
+      "vibe": "The boundary is where performance goes to die. Keep the hot loop inside the module and stop copying strings across it."
+    },
+    {
       "path": "engineering/engineering-wechat-mini-program-developer.md",
       "category": "engineering",
       "name": "WeChat Mini Program Developer",
@@ -443,6 +646,26 @@
       "emoji": "💬",
       "color": "green",
       "vibe": "Builds performant Mini Programs that thrive in the WeChat ecosystem."
+    },
+    {
+      "path": "engineering/engineering-wordpress-performance.md",
+      "category": "engineering",
+      "name": "WordPress Performance Engineer",
+      "nameOverflows": true,
+      "description": "Expert WordPress performance engineer specializing in Core Web Vitals, object caching (Redis/Memcached), page caching, database and WP_Query optimization, the Transients API, asset minification/deferral/critical CSS, image optimization and lazy loading, CDN integration, plugin performance auditing, and PHP-FPM/opcache tuning for fast, audit-passing sites",
+      "emoji": "⚡",
+      "color": "purple",
+      "vibe": null
+    },
+    {
+      "path": "engineering/engineering-wordpress-shopping-cart.md",
+      "category": "engineering",
+      "name": "WordPress Shopping Cart Engineer",
+      "nameOverflows": true,
+      "description": "Expert WordPress e-commerce engineer specializing in WooCommerce for product catalog management, payment gateway integration, checkout customization, order management, tax and coupon configuration, and conversion-optimized storefront delivery on WordPress",
+      "emoji": "🛍️",
+      "color": "purple",
+      "vibe": null
     },
     {
       "path": "finance/finance-bookkeeper-controller.md",
@@ -695,6 +918,166 @@
       "vibe": "Builds seamless open worlds with World Partition, Nanite, and procedural foliage."
     },
     {
+      "path": "gis/gis-3d-scene-developer.md",
+      "category": "gis",
+      "name": "3D & Scene Developer",
+      "nameOverflows": false,
+      "description": "Web 3D visualization specialist who creates immersive 3D scenes, terrain models, point cloud visualizations, and interactive web experiences using Cesium, ArcGIS Scene Viewer, and modern 3D web frameworks.",
+      "emoji": "🏔️",
+      "color": "cyan",
+      "vibe": "Bringing the third dimension to the web — one scene at a time."
+    },
+    {
+      "path": "gis/gis-analyst.md",
+      "category": "gis",
+      "name": "GIS Analyst",
+      "nameOverflows": false,
+      "description": "Day-to-day GIS operator who creates maps, manages layers, performs spatial queries, and maintains geospatial data integrity across desktop and web environments.",
+      "emoji": "🖥️",
+      "color": "teal",
+      "vibe": "The reliable hands-on operator who keeps the GIS running day to day."
+    },
+    {
+      "path": "gis/gis-bim-specialist.md",
+      "category": "gis",
+      "name": "BIM/GIS Specialist",
+      "nameOverflows": false,
+      "description": "Integration specialist who bridges Building Information Modeling and Geographic Information Systems — Revit/IFC data conversion, indoor mapping, digital twin architecture, and facility management data models.",
+      "emoji": "🏗️",
+      "color": "gold",
+      "vibe": "Where buildings meet geography — the spatial side of the built world."
+    },
+    {
+      "path": "gis/gis-cartography-designer.md",
+      "category": "gis",
+      "name": "Cartography Designer",
+      "nameOverflows": false,
+      "description": "Map aesthetics specialist who designs beautiful, readable, and effective maps — color theory, typography, label placement, basemap selection, and visual hierarchy for both print and web.",
+      "emoji": "🎨",
+      "color": "pink",
+      "vibe": "A map that communicates beautifully is a map that gets used."
+    },
+    {
+      "path": "gis/gis-drone-reality-mapping.md",
+      "category": "gis",
+      "name": "Drone/Reality Mapping Specialist",
+      "nameOverflows": true,
+      "description": "Photogrammetry and reality capture expert who processes drone imagery into orthomosaics, digital terrain models, point clouds, and 3D meshes — bridging field capture and GIS-ready products.",
+      "emoji": "🛸",
+      "color": "amber",
+      "vibe": "From raw drone footage to production-ready GIS data — seamless."
+    },
+    {
+      "path": "gis/gis-geoai-ml-engineer.md",
+      "category": "gis",
+      "name": "GeoAI/ML Engineer",
+      "nameOverflows": false,
+      "description": "Geospatial machine learning specialist who builds models for feature extraction, object detection, image segmentation, and land cover classification from satellite and aerial imagery.",
+      "emoji": "🤖",
+      "color": "green",
+      "vibe": "Teaching machines to see the Earth — one pixel at a time."
+    },
+    {
+      "path": "gis/gis-geoprocessing-specialist.md",
+      "category": "gis",
+      "name": "Geoprocessing Specialist",
+      "nameOverflows": true,
+      "description": "ArcPy and Python toolbox expert who automates spatial workflows — builds .pyt toolboxes, Model Builder processes, batch geoprocessing automation, and custom analysis scripts for ArcGIS Pro.",
+      "emoji": "⚙️",
+      "color": "red",
+      "vibe": "If you've done it manually more than twice, this agent will automate it."
+    },
+    {
+      "path": "gis/gis-qa-engineer.md",
+      "category": "gis",
+      "name": "GIS QA Engineer",
+      "nameOverflows": false,
+      "description": "Quality assurance specialist who validates geospatial data integrity — topology checks, metadata audits, CRS consistency, accuracy assessment, and compliance verification.",
+      "emoji": "✅",
+      "color": "purple",
+      "vibe": "Data doesn't ship until QA says it ships."
+    },
+    {
+      "path": "gis/gis-solution-engineer.md",
+      "category": "gis",
+      "name": "Solution Engineer",
+      "nameOverflows": false,
+      "description": "Hands-on GIS prototype builder who takes strategy from Technical Consultant and turns it into working demos, proof-of-concepts, and technical validations across the full Esri and open-source stack.",
+      "emoji": "🔧",
+      "color": "blue",
+      "vibe": "The builder who makes strategy real — one working demo at a time."
+    },
+    {
+      "path": "gis/gis-spatial-data-engineer.md",
+      "category": "gis",
+      "name": "Spatial Data Engineer",
+      "nameOverflows": false,
+      "description": "ETL specialist who transforms messy geospatial data from any source into clean, standardized, production-ready datasets — format conversion, CRS reprojection, attribute normalization, and automated pipelines.",
+      "emoji": "📦",
+      "color": "orange",
+      "vibe": "Data comes in dirty. It leaves clean, documented, and ready to publish."
+    },
+    {
+      "path": "gis/gis-spatial-data-scientist.md",
+      "category": "gis",
+      "name": "Spatial Data Scientist",
+      "nameOverflows": false,
+      "description": "Advanced spatial analytics specialist who applies statistical modeling, spatial econometrics, clustering, and predictive analytics to geospatial data — finding patterns that aren't visible on a map.",
+      "emoji": "📊",
+      "color": "indigo",
+      "vibe": "Finding the patterns in space that even experienced analysts miss."
+    },
+    {
+      "path": "gis/gis-technical-consultant.md",
+      "category": "gis",
+      "name": "Technical Consultant",
+      "nameOverflows": false,
+      "description": "Strategic GIS advisor who translates business problems into geospatial solutions — gap analysis, technology roadmaps, RFP responses, and digital transformation strategy across Esri and open-source ecosystems.",
+      "emoji": "🧠",
+      "color": "navy",
+      "vibe": "The strategist who connects business pain points with geospatial solutions that actually deliver ROI."
+    },
+    {
+      "path": "gis/gis-web-gis-developer.md",
+      "category": "gis",
+      "name": "Web GIS Developer",
+      "nameOverflows": false,
+      "description": "Full-stack web GIS engineer who builds interactive mapping applications — MapLibre GL JS, ArcGIS JS API, Leaflet, real-time dashboards, REST API integration, and geospatial web services.",
+      "emoji": "🌐",
+      "color": "blue",
+      "vibe": "Maps on the web that actually work — fast, responsive, and beautiful."
+    },
+    {
+      "path": "healthcare/healthcare-clinical-evidence-agent.md",
+      "category": "healthcare",
+      "name": "Clinical Evidence Agent",
+      "nameOverflows": true,
+      "description": "Evidence standards and clinical credibility framework for AI agents operating in healthcare contexts. Defines how to distinguish validated from unvalidated clinical claims, how to write for both peer review and investor audiences from the same evidence base, and how to frame clinical decision support without claiming diagnostic authority.",
+      "emoji": "🩺",
+      "color": "#1A5276",
+      "vibe": "Clinical credibility is earned through evidence standards, not confidence."
+    },
+    {
+      "path": "healthcare/healthcare-innovation-strategist.md",
+      "category": "healthcare",
+      "name": "Healthcare Innovation Strategist",
+      "nameOverflows": true,
+      "description": "Strategic narrative architect for healthcare founders operating at the intersection of clinical credibility, healthcare finance, and complex deployment contexts. Maintains narrative coherence across investor, regulatory, sovereign, and clinical audiences. Built for founders who need to translate complex clinical and financial realities into language that moves capital, changes policy, and builds trust with doctors and patients simultaneously.",
+      "emoji": "🧭",
+      "color": "#1B4F72",
+      "vibe": "Holds the narrative together when the team is heads-down building."
+    },
+    {
+      "path": "healthcare/healthcare-sovereign-health-systems-agent.md",
+      "category": "healthcare",
+      "name": "Sovereign Health Systems Agent",
+      "nameOverflows": true,
+      "description": "Government health mandate engagement framework for AI agents operating at the intersection of national health infrastructure, UHC policy, and emerging market deployment. Defines how to navigate sovereign health ministry engagement, frame health technology for mandate alignment, and sequence a dual-market launch across regulated and sovereign contexts.",
+      "emoji": "🌍",
+      "color": "#1B4F72",
+      "vibe": "Global health infrastructure is the largest underserved market in health tech. Someone has to build it first."
+    },
+    {
       "path": "integrations/mcp-memory/backend-architect-with-memory.md",
       "category": "integrations",
       "name": "Backend Architect",
@@ -704,6 +1087,16 @@
       "color": "blue",
       "vibe": null,
       "displayName": "Backend Architect (integrations)"
+    },
+    {
+      "path": "marketing/marketing-aeo-foundations.md",
+      "category": "marketing",
+      "name": "AEO Foundations Architect",
+      "nameOverflows": true,
+      "description": "Expert in AI Engine Optimization infrastructure — implements llms.txt, AI-aware robots.txt, token-budgeted content, structured Markdown availability, and agent discovery files so AI crawlers, citation engines, and browsing agents can find, parse, and act on your site",
+      "emoji": "🏗️",
+      "color": "#059669",
+      "vibe": "Expert in AI Engine Optimization infrastructure"
     },
     {
       "path": "marketing/marketing-agentic-search-optimizer.md",
@@ -826,6 +1219,26 @@
       "vibe": "Masters the Douyin algorithm so your short videos actually get seen."
     },
     {
+      "path": "marketing/marketing-email-strategist.md",
+      "category": "marketing",
+      "name": "Email Marketing Strategist",
+      "nameOverflows": true,
+      "description": "Expert email marketing strategist for CRM-driven campaigns, lifecycle automation, segmentation architecture, and deliverability. Designs sequences (welcome, nurture, reactivation, win-back, review, referral) grounded in 2025-2026 benchmarks, AI-driven personalization, and post-Apple MPP measurement.",
+      "emoji": "📧",
+      "color": "green",
+      "vibe": "Turns a messy contact list into a segmented, automated revenue engine that sends the right message at the right time."
+    },
+    {
+      "path": "marketing/marketing-global-podcast-strategist.md",
+      "category": "marketing",
+      "name": "Global Podcast Strategist",
+      "nameOverflows": true,
+      "description": "Expert podcast growth specialist focused on show positioning, audience development, content strategy, and monetisation. Transforms raw ideas into authoritative audio brands that compound listeners and revenue over time on Spotify, Apple Podcasts, and YouTube.",
+      "emoji": "🎙️",
+      "color": "purple",
+      "vibe": "Turns conversations into communities and episodes into growth engines."
+    },
+    {
       "path": "marketing/marketing-growth-hacker.md",
       "category": "marketing",
       "name": "Growth Hacker",
@@ -876,6 +1289,16 @@
       "vibe": "Coaches your livestream hosts from awkward beginners to million-yuan sellers."
     },
     {
+      "path": "marketing/marketing-multi-platform-publisher.md",
+      "category": "marketing",
+      "name": "Multi-Platform Publisher",
+      "nameOverflows": true,
+      "description": "Expert orchestrator for one-click Chinese blog publishing. Routes a single article to 知乎 / 小红书 / CSDN / B站 / 公众号 / 掘金 via Wechatsync (main channel) with xhs-mcp and biliup as specialized fallbacks. Handles per-platform content adaptation, draft-first publishing, rate control, and risk-avoidance. Does NOT auto-publish — always stops at draft for human review.",
+      "emoji": "📡",
+      "color": "#FF6B35",
+      "vibe": "One article, all platforms, safely — the traffic conductor for Chinese content creators."
+    },
+    {
       "path": "marketing/marketing-podcast-strategist.md",
       "category": "marketing",
       "name": "Podcast Strategist",
@@ -884,6 +1307,16 @@
       "emoji": "🎧",
       "color": "purple",
       "vibe": "Guides your podcast from concept to loyal audience in China's booming audio scene."
+    },
+    {
+      "path": "marketing/marketing-pr-communications-manager.md",
+      "category": "marketing",
+      "name": "PR & Communications Manager",
+      "nameOverflows": true,
+      "description": "Strategic public relations and communications specialist for media relations, press releases, crisis communications, executive thought leadership, brand reputation management, and integrated communications planning — building and protecting reputations through earned media, storytelling, and proactive narrative control",
+      "emoji": "📣",
+      "color": "blue",
+      "vibe": null
     },
     {
       "path": "marketing/marketing-private-domain-operator.md",
@@ -984,6 +1417,16 @@
       "emoji": "🔥",
       "color": "#FF8200",
       "vibe": "Makes your brand trend on Weibo and keeps the conversation going."
+    },
+    {
+      "path": "marketing/marketing-x-twitter-intelligence-analyst.md",
+      "category": "marketing",
+      "name": "X/Twitter Intelligence Analyst",
+      "nameOverflows": true,
+      "description": "Social intelligence specialist for X/Twitter research, trend detection, account monitoring, and evidence-backed audience insights using public signals and structured data workflows.",
+      "emoji": "🛰️",
+      "color": "#111111",
+      "vibe": "Turns noisy X conversations into sourced market, audience, and risk intelligence."
     },
     {
       "path": "marketing/marketing-xiaohongshu-specialist.md",
@@ -1146,6 +1589,16 @@
       "vibe": "Enforces traceable commits, structured PRs, and release-safe branch strategy."
     },
     {
+      "path": "project-management/project-management-meeting-notes-specialist.md",
+      "category": "project-management",
+      "name": "Meeting Notes Specialist",
+      "nameOverflows": true,
+      "description": "Extract structured decisions, action items, and open questions from meeting transcripts or rough notes into a clean 4-section summary.",
+      "emoji": "📋",
+      "color": "blue",
+      "vibe": "Precise extractor — finds the signal in the noise, never invents what isn't there."
+    },
+    {
       "path": "project-management/project-management-project-shepherd.md",
       "category": "project-management",
       "name": "Project Shepherd",
@@ -1236,6 +1689,16 @@
       "vibe": "Wins the technical decision before the deal even hits procurement."
     },
     {
+      "path": "sales/sales-offer-lead-gen-strategist.md",
+      "category": "sales",
+      "name": "Offer & Lead Gen Strategist",
+      "nameOverflows": true,
+      "description": "Top-of-funnel architect who designs irresistible offers and lead magnets that attract qualified buyers at scale. Specializes in value-equation offer construction, lead magnet typology, multi-channel lead generation, and compounding reach through customers, employees, agencies, and affiliates.",
+      "emoji": "🧲",
+      "color": "#F59E0B",
+      "vibe": "Builds the thing buyers can't ignore — then multiplies the channels that deliver it."
+    },
+    {
       "path": "sales/sales-outbound-strategist.md",
       "category": "sales",
       "name": "Outbound Strategist",
@@ -1264,6 +1727,106 @@
       "emoji": "🏹",
       "color": "#2563EB",
       "vibe": "Turns RFP responses into stories buyers can't put down."
+    },
+    {
+      "path": "security/security-appsec-engineer.md",
+      "category": "security",
+      "name": "Application Security Engineer",
+      "nameOverflows": true,
+      "description": "AppSec specialist who secures the software development lifecycle through threat modeling, secure code review, SAST/DAST integration, and developer security education that makes secure code the default.",
+      "emoji": "🔐",
+      "color": "#059669",
+      "vibe": "Makes developers write secure code without even realizing it."
+    },
+    {
+      "path": "security/security-architect.md",
+      "category": "security",
+      "name": "Security Architect",
+      "nameOverflows": false,
+      "description": "Expert security architect specializing in threat modeling, secure-by-design architecture, trust-boundary analysis, defense-in-depth, and risk-based security reviews across web, API, cloud-native, and distributed systems. Designs the security model; hands code-level SAST/DAST and SDLC work to the AppSec Engineer.",
+      "emoji": "🛡️",
+      "color": "red",
+      "vibe": "Designs the security architecture and threat models that hold under adversarial pressure — the blueprint, not the bug-fix."
+    },
+    {
+      "path": "security/security-blockchain-security-auditor.md",
+      "category": "security",
+      "name": "Blockchain Security Auditor",
+      "nameOverflows": true,
+      "description": "Expert smart contract security auditor specializing in vulnerability detection, formal verification, exploit analysis, and comprehensive audit report writing for DeFi protocols and blockchain applications.",
+      "emoji": "🛡️",
+      "color": "red",
+      "vibe": "Finds the exploit in your smart contract before the attacker does."
+    },
+    {
+      "path": "security/security-cloud-security-architect.md",
+      "category": "security",
+      "name": "Cloud Security Architect",
+      "nameOverflows": true,
+      "description": "Cloud-native security specialist designing zero trust architectures, implementing defense-in-depth across AWS, Azure, and GCP, and securing infrastructure-as-code pipelines from day one.",
+      "emoji": "☁️",
+      "color": "#3b82f6",
+      "vibe": "Builds cloud infrastructure where \"secure by default\" isn't just a slide title."
+    },
+    {
+      "path": "security/security-compliance-auditor.md",
+      "category": "security",
+      "name": "Compliance Auditor",
+      "nameOverflows": false,
+      "description": "Expert technical compliance auditor specializing in SOC 2, ISO 27001, HIPAA, and PCI-DSS audits — from readiness assessment through evidence collection to certification.",
+      "emoji": "📋",
+      "color": "orange",
+      "vibe": "Walks you from readiness assessment through evidence collection to SOC 2 certification."
+    },
+    {
+      "path": "security/security-incident-responder.md",
+      "category": "security",
+      "name": "Incident Responder",
+      "nameOverflows": false,
+      "description": "Digital forensics and incident response specialist who leads breach investigations, contains active threats, coordinates crisis response, and writes post-mortems that prevent recurrence.",
+      "emoji": "🚨",
+      "color": "#f59e0b",
+      "vibe": "Runs toward the breach while everyone else runs away."
+    },
+    {
+      "path": "security/security-penetration-tester.md",
+      "category": "security",
+      "name": "Penetration Tester",
+      "nameOverflows": false,
+      "description": "Offensive security specialist conducting authorized penetration tests, red team operations, and vulnerability assessments across networks, web applications, and cloud infrastructure.",
+      "emoji": "🗡️",
+      "color": "#dc2626",
+      "vibe": "Breaks into your systems so the real attackers can't."
+    },
+    {
+      "path": "security/security-senior-secops.md",
+      "category": "security",
+      "name": "Senior SecOps Engineer",
+      "nameOverflows": false,
+      "description": "Defensive application security specialist who scans every code submission for secrets and sensitive data exposure before anything else, then implements or audits security controls following the organization's security standard — covering authentication, authorization, tokens, cookies, HTTP headers, CORS, rate limiting, CSP, secrets management, input validation, and secure logging.",
+      "emoji": "🛡️",
+      "color": "#E67E22",
+      "vibe": "Before I read your request, I've already scanned your code for secrets. Security isn't a phase — it's line zero."
+    },
+    {
+      "path": "security/security-threat-detection-engineer.md",
+      "category": "security",
+      "name": "Threat Detection Engineer",
+      "nameOverflows": true,
+      "description": "Expert detection engineer specializing in SIEM rule development, MITRE ATT&CK coverage mapping, threat hunting, alert tuning, and detection-as-code pipelines for security operations teams.",
+      "emoji": "🎯",
+      "color": "#7b2d8e",
+      "vibe": "Builds the detection layer that catches attackers after they bypass prevention."
+    },
+    {
+      "path": "security/security-threat-intelligence-analyst.md",
+      "category": "security",
+      "name": "Threat Intelligence Analyst",
+      "nameOverflows": true,
+      "description": "Cyber threat intelligence specialist who tracks adversary groups, maps attack campaigns to MITRE ATT&CK, produces actionable intelligence reports, and builds detection rules that catch real threats.",
+      "emoji": "🔍",
+      "color": "#7c3aed",
+      "vibe": "Knows what the adversary will do before the adversary does."
     },
     {
       "path": "spatial-computing/macos-spatial-metal-engineer.md",
@@ -1366,24 +1929,34 @@
       "vibe": "Calm, skeptical, and operations-focused. Prefer reliable systems over automation hype."
     },
     {
-      "path": "specialized/blockchain-security-auditor.md",
+      "path": "specialized/business-strategist.md",
       "category": "specialized",
-      "name": "Blockchain Security Auditor",
-      "nameOverflows": true,
-      "description": "Expert smart contract security auditor specializing in vulnerability detection, formal verification, exploit analysis, and comprehensive audit report writing for DeFi protocols and blockchain applications.",
-      "emoji": "🛡️",
-      "color": "red",
-      "vibe": "Finds the exploit in your smart contract before the attacker does."
+      "name": "Business Strategist",
+      "nameOverflows": false,
+      "description": "Senior management consulting specialist for competitive analysis, market entry strategy, business model design, growth planning, organizational strategy, and strategic decision-making — translating complex market dynamics into clear, actionable strategies that create sustainable competitive advantage",
+      "emoji": "♟️",
+      "color": "indigo",
+      "vibe": null
     },
     {
-      "path": "specialized/compliance-auditor.md",
+      "path": "specialized/change-management-consultant.md",
       "category": "specialized",
-      "name": "Compliance Auditor",
-      "nameOverflows": false,
-      "description": "Expert technical compliance auditor specializing in SOC 2, ISO 27001, HIPAA, and PCI-DSS audits — from readiness assessment through evidence collection to certification.",
-      "emoji": "📋",
-      "color": "orange",
-      "vibe": "Walks you from readiness assessment through evidence collection to SOC 2 certification."
+      "name": "Change Management Consultant",
+      "nameOverflows": true,
+      "description": "Expert change management specialist using ADKAR, Kotter, and Prosci frameworks to guide organizations through technology implementations, restructuring, culture transformation, and M&A integration — managing resistance, building adoption, and ensuring changes stick long after go-live",
+      "emoji": "🔄",
+      "color": "amber",
+      "vibe": null
+    },
+    {
+      "path": "specialized/chief-financial-officer.md",
+      "category": "specialized",
+      "name": "Chief Financial Officer",
+      "nameOverflows": true,
+      "description": "Strategic finance executive who governs capital allocation, treasury operations, financial planning, M&A finance, investor relations, and board reporting — translating financial complexity into clear decisions that drive business performance and stakeholder confidence.",
+      "emoji": "💼",
+      "color": "navy",
+      "vibe": null
     },
     {
       "path": "specialized/corporate-training-designer.md",
@@ -1406,6 +1979,16 @@
       "vibe": "Every customer interaction is a chance to turn a problem into loyalty — handle it with care, speed, and a human touch."
     },
     {
+      "path": "specialized/customer-success-manager.md",
+      "category": "specialized",
+      "name": "Customer Success Manager",
+      "nameOverflows": true,
+      "description": "Strategic customer success specialist for onboarding, health scoring, QBR facilitation, churn prevention, expansion identification, and renewal management — driving net revenue retention by turning customers into long-term partners who achieve measurable outcomes",
+      "emoji": "🌟",
+      "color": "green",
+      "vibe": null
+    },
+    {
       "path": "specialized/data-consolidation-agent.md",
       "category": "specialized",
       "name": "Data Consolidation Agent",
@@ -1416,6 +1999,26 @@
       "vibe": "Consolidates scattered sales data into live reporting dashboards."
     },
     {
+      "path": "specialized/data-privacy-officer.md",
+      "category": "specialized",
+      "name": "Data Privacy Officer",
+      "nameOverflows": false,
+      "description": "Corporate data privacy specialist and DPO who builds GDPR, CCPA, and global privacy compliance programs — covering data mapping, privacy impact assessments, consent management, breach response, vendor due diligence, and regulatory engagement.",
+      "emoji": "🔐",
+      "color": "purple",
+      "vibe": "Corporate data privacy specialist and DPO who builds GDPR, CCPA, and global privacy compliance programs"
+    },
+    {
+      "path": "specialized/esg-sustainability-officer.md",
+      "category": "specialized",
+      "name": "ESG & Sustainability Officer",
+      "nameOverflows": true,
+      "description": "Corporate sustainability strategist and ESG reporting specialist who builds environmental, social, and governance programs, manages disclosures, drives decarbonization initiatives, and aligns business strategy with stakeholder and regulatory expectations.",
+      "emoji": "🌱",
+      "color": "green",
+      "vibe": null
+    },
+    {
       "path": "specialized/government-digital-presales-consultant.md",
       "category": "specialized",
       "name": "Government Digital Presales Consultant",
@@ -1424,6 +2027,16 @@
       "emoji": "🏛️",
       "color": "#8B0000",
       "vibe": "Presales expert for China's government digital transformation market (ToG)"
+    },
+    {
+      "path": "specialized/grant-writer.md",
+      "category": "specialized",
+      "name": "Grant Writer",
+      "nameOverflows": false,
+      "description": "Expert grant writing specialist for nonprofits, research institutions, and social enterprises — covering prospect research, letter of inquiry writing, full proposal development, budget narratives, federal and foundation grants, and post-award reporting to maximize funding success",
+      "emoji": "📝",
+      "color": "purple",
+      "vibe": "Expert grant writing specialist for nonprofits, research institutions, and social enterprises"
     },
     {
       "path": "specialized/healthcare-customer-service.md",
@@ -1536,6 +2149,56 @@
       "vibe": "Builds unified code intelligence through LSP orchestration and semantic indexing."
     },
     {
+      "path": "specialized/ma-integration-manager.md",
+      "category": "specialized",
+      "name": "M&A Integration Manager",
+      "nameOverflows": true,
+      "description": "Mergers and acquisitions integration specialist who designs and executes post-merger integration programs — covering Day 1 readiness, 100-day planning, synergy tracking, cultural integration, functional workstream coordination, and transition service agreement management.",
+      "emoji": "🤝",
+      "color": "indigo",
+      "vibe": "Mergers and acquisitions integration specialist who designs and executes post-merger integration programs"
+    },
+    {
+      "path": "specialized/medical-billing-coding-specialist.md",
+      "category": "specialized",
+      "name": "Medical Billing & Coding Specialist",
+      "nameOverflows": true,
+      "description": "Expert medical billing and coding specialist for ICD-10-CM/PCS, CPT, and HCPCS coding, claim submission, denial management, revenue cycle optimization, compliance auditing, and payer contract analysis — maximizing clean claim rates and revenue recovery for healthcare providers of all sizes",
+      "emoji": "🏥",
+      "color": "blue",
+      "vibe": null
+    },
+    {
+      "path": "specialized/operations-manager.md",
+      "category": "specialized",
+      "name": "Operations Manager",
+      "nameOverflows": false,
+      "description": "Business operations specialist who applies Lean, Six Sigma, and systems thinking to process mapping, capacity planning, KPI governance, vendor management, and organizational efficiency — turning operational complexity into repeatable, measurable performance.",
+      "emoji": "⚙️",
+      "color": "slate",
+      "vibe": null
+    },
+    {
+      "path": "specialized/organizational-psychologist.md",
+      "category": "specialized",
+      "name": "Organizational Psychologist",
+      "nameOverflows": true,
+      "description": "Applied organizational psychologist who diagnoses team dynamics, psychological safety, burnout risk, and culture health — using evidence-based frameworks to help leaders build high-performing, resilient, and psychologically safe organizations.",
+      "emoji": "🧠",
+      "color": "teal",
+      "vibe": "Applied organizational psychologist who diagnoses team dynamics, psychological safety, burnout risk, and culture health"
+    },
+    {
+      "path": "specialized/personal-growth-mentor.md",
+      "category": "specialized",
+      "name": "Personal Growth Mentor",
+      "nameOverflows": false,
+      "description": "Cross-domain personal development mentor for goal clarity, habit design, strategic decisions, and accountability without motivational fluff.",
+      "emoji": "🌱",
+      "color": "teal",
+      "vibe": "Systems over slogans. Clarity before action. Execution over inspiration."
+    },
+    {
       "path": "specialized/real-estate-buyer-seller.md",
       "category": "specialized",
       "name": "Real Estate Buyer & Seller",
@@ -1646,6 +2309,16 @@
       "vibe": "Professional documents from code — PDFs, slides, spreadsheets, and reports."
     },
     {
+      "path": "specialized/specialized-fedramp-rmf-compliance.md",
+      "category": "specialized",
+      "name": "FedRAMP & RMF Compliance Engineer",
+      "nameOverflows": true,
+      "description": "Expert FedRAMP and NIST Risk Management Framework compliance engineer specializing in both FedRAMP authorization pathways — the traditional Rev5 path (NIST 800-53 Rev 5 control implementation, System Security Plans, 3PAO assessment, agency authorization) and the modernized FedRAMP 20x path (Key Security Indicators, automated machine-readable validation, compliance-as-code) — plus the ATO process, continuous monitoring (ConMon), POA&M management, FIPS 199 categorization, authorization boundary diagrams, OSCAL machine-readable packages, and cloud security compliance for government and regulated industries",
+      "emoji": "🛡️",
+      "color": "red",
+      "vibe": "Expert FedRAMP and NIST Risk Management Framework compliance engineer specializing in both FedRAMP authorization pathways"
+    },
+    {
       "path": "specialized/specialized-french-consulting-market.md",
       "category": "specialized",
       "name": "French Consulting Market Navigator",
@@ -1686,6 +2359,16 @@
       "vibe": "Audits ML models end-to-end — from data reconstruction to calibration testing."
     },
     {
+      "path": "specialized/specialized-pricing-analyst.md",
+      "category": "specialized",
+      "name": "Pricing Analyst",
+      "nameOverflows": false,
+      "description": "Specialized pricing analyst who develops optimal pricing models through market research, competitor analysis, cost structure evaluation, and margin optimization — turning pricing from guesswork into a data-driven competitive advantage.",
+      "emoji": "💰",
+      "color": "gold",
+      "vibe": "Finds the price point where value captured meets value delivered — then proves it with data."
+    },
+    {
       "path": "specialized/specialized-salesforce-architect.md",
       "category": "specialized",
       "name": "Salesforce Architect",
@@ -1694,6 +2377,16 @@
       "emoji": "☁️",
       "color": "#00A1E0",
       "vibe": "The calm hand that turns a tangled Salesforce org into an architecture that scales — one governor limit at a time"
+    },
+    {
+      "path": "specialized/specialized-strategy-duel-agent.md",
+      "category": "specialized",
+      "name": "Strategy Duel Agent",
+      "nameOverflows": false,
+      "description": "Conducts live strategy duels using game theory and the 36 Chinese stratagems",
+      "emoji": "⚔️",
+      "color": "#1e90ff",
+      "vibe": "Orchestrates high-stakes, turn-based strategy battles with sharp analysis and memorable commentary"
     },
     {
       "path": "specialized/specialized-workflow-architect.md",
@@ -1724,6 +2417,16 @@
       "emoji": "🔗",
       "color": "blue",
       "vibe": "Expert supply chain management and procurement strategy specialist"
+    },
+    {
+      "path": "specialized/zk-steward.md",
+      "category": "specialized",
+      "name": "ZK Steward",
+      "nameOverflows": false,
+      "description": "Knowledge-base steward in the spirit of Niklas Luhmann's Zettelkasten. Default perspective: Luhmann; switches to domain experts (Feynman, Munger, Ogilvy, etc.) by task. Enforces atomic notes, connectivity, and validation loops. Use for knowledge-base building, note linking, complex task breakdown, and cross-domain decision support.",
+      "emoji": "🗃️",
+      "color": "teal",
+      "vibe": "Channels Luhmann's Zettelkasten to build connected, validated knowledge bases."
     },
     {
       "path": "support/support-analytics-reporter.md",
@@ -1834,6 +2537,16 @@
       "emoji": "🧐",
       "color": "red",
       "vibe": "Defaults to \"NEEDS WORK\" — requires overwhelming proof for production readiness."
+    },
+    {
+      "path": "testing/testing-test-automation-engineer.md",
+      "category": "testing",
+      "name": "Test Automation Engineer",
+      "nameOverflows": true,
+      "description": "Expert end-to-end test automation engineer for Playwright and Cypress — resilient selectors, flake elimination, isolated test data, CI parallelization, and trace-driven failure debugging.",
+      "emoji": "🎭",
+      "color": "#2EAD33",
+      "vibe": "A flaky test is a bug with your name on it. Deterministic, isolated, fast — you don't get to pick two."
     },
     {
       "path": "testing/testing-test-results-analyzer.md",

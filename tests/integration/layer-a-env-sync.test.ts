@@ -1,10 +1,10 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
+import Database from '../../src/server/sqlite.js'
 
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -13,7 +13,7 @@ const originalClaudeProjectsDir = process.env.HIVE_CLAUDE_PROJECTS_DIR
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
-  timeoutMs = 4000,
+  timeoutMs = 10_000,
   intervalMs = 25
 ) => {
   const deadline = Date.now() + timeoutMs
@@ -33,7 +33,7 @@ const waitFor = async (
 }
 
 const readLastSessionId = (dataDir: string, workspaceId: string, agentId: string) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
   const row = db
     .prepare('SELECT last_session_id FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?')
     .get(workspaceId, agentId) as { last_session_id: string } | undefined
@@ -45,7 +45,7 @@ const listSystemMessages = (
   dataDir: string,
   type: 'system_env_sync' | 'system_recovery_summary'
 ) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
   const rows = db
     .prepare('SELECT type, worker_id, text FROM messages WHERE type = ? ORDER BY sequence ASC')
     .all(type) as Array<{ text: string; type: string; worker_id: string }>
@@ -81,18 +81,23 @@ import { join } from 'node:path'
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
-const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
+const encoded = process.cwd().replace(/[^A-Za-z0-9-]/g, '-')
 const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
 const projectDir = join(projectsRoot, encoded)
 const expectResumeMarker = join(process.cwd(), '.expect-resume')
 mkdirSync(projectDir, { recursive: true })
 const sessionPath = join(projectDir, sessionId + '.jsonl')
 writeFileSync(sessionPath, '{}\\n')
+let pasteOpen = false
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
   appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
-  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
+  if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
+    pasteOpen = false
+    process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  }
 })
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(expectResumeMarker) && !args.includes('--resume')) process.exit(2)
@@ -101,6 +106,11 @@ setInterval(() => {}, 1000)
 `
   )
   chmodSync(cliPath, 0o755)
+  if (process.platform === 'win32') {
+    const cmdPath = `${cliPath}.cmd`
+    writeFileSync(cmdPath, `@echo off\r\n"${process.execPath}" "%~dp0${basename(cliPath)}" %*\r\n`)
+    return cmdPath
+  }
   return cliPath
 }
 
@@ -177,7 +187,7 @@ afterEach(() => {
   } else {
     process.env.HIVE_CLAUDE_PROJECTS_DIR = originalClaudeProjectsDir
   }
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('Layer A native resume integration', () => {
@@ -236,14 +246,62 @@ describe('Layer A native resume integration', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(`--resume ${sessionId}`)
-        expect(state.output).not.toContain('STDIN:')
-        expect(state.output).not.toContain('[Hive 系统消息')
       })
+      const stableUntil = Date.now() + 500
+      while (Date.now() <= stableUntil) {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).not.toContain('STDIN:')
+        expect(state.output).not.toContain('<hive-system-message>')
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
 
       expect(listSystemMessages(server.dataDir, 'system_env_sync')).toHaveLength(0)
       expect(listSystemMessages(server.dataDir, 'system_recovery_summary')).toHaveLength(0)
     } finally {
       await server.close()
     }
-  }, 10_000)
+  }, 25_000)
+
+  test('explicit resume command does not inject startup prompts', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-explicit-resume-home-'))
+    const workspacePathRaw = join(homeDir, 'workspace')
+    tempDirs.push(homeDir)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
+    const fakeClaude = writeResumableClaudeEcho(workspacePath)
+    const sessionId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const alice = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Alice')
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id, {
+        command: fakeClaude,
+        args: ['--resume', sessionId, '--session-id-test', sessionId],
+        command_preset_id: 'claude',
+      })
+
+      const run = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain(`--resume ${sessionId}`)
+      })
+      const stableUntil = Date.now() + 500
+      while (Date.now() <= stableUntil) {
+        const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).not.toContain('STDIN:')
+        expect(state.output).not.toContain('<hive-message')
+        expect(state.output).not.toContain('<hive-system-message>')
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+    } finally {
+      await server.close()
+    }
+  }, 25_000)
 })

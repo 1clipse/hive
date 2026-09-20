@@ -1,6 +1,20 @@
 import { describe, expect, test } from 'vitest'
 
-import { parseCancelArgs, parseReportArgs } from '../../src/cli/team.js'
+import {
+  decodeStdinBuffer,
+  parseCancelArgs,
+  parseMemoryAddArgs,
+  parseMemoryApplyArgs,
+  parseMemoryApplyPayload,
+  parseMemoryDreamShowArgs,
+  parseMemoryForgetArgs,
+  parseMemorySearchArgs,
+  parseMemoryShowArgs,
+  parseRecallArgs,
+  parseReportArgs,
+  parseReviewArgs,
+  TeamUsageError,
+} from '../../src/cli/team.js'
 
 describe('parseReportArgs', () => {
   test('accepts the legacy positional-first form', () => {
@@ -186,6 +200,66 @@ describe('parseReportArgs', () => {
   })
 })
 
+describe('parseReviewArgs', () => {
+  test('accepts flags in any order with a positional focus', () => {
+    expect(
+      parseReviewArgs([
+        '--role',
+        'tester',
+        '--cli',
+        'codex',
+        'uncommitted auth retry',
+        '--name',
+        'inspector',
+        '--model',
+        'gpt-5',
+      ])
+    ).toEqual({
+      cli: 'codex',
+      focus: 'uncommitted auth retry',
+      model: 'gpt-5',
+      name: 'inspector',
+      role: 'tester',
+      useStdin: false,
+    })
+  })
+
+  test('--stdin defers the focus and rejects a positional', () => {
+    expect(parseReviewArgs(['--stdin', '--cli', 'gemini'])).toEqual({
+      cli: 'gemini',
+      focus: null,
+      useStdin: true,
+    })
+    try {
+      parseReviewArgs(['look at diff', '--stdin'])
+      throw new Error('expected TeamUsageError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(TeamUsageError)
+      expect((error as TeamUsageError).code).toBe('REVIEW_STDIN_EXCLUSIVE')
+    }
+  })
+
+  test('rejects a missing focus with review usage', () => {
+    try {
+      parseReviewArgs(['--cli', 'claude'])
+      throw new Error('expected TeamUsageError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(TeamUsageError)
+      expect((error as TeamUsageError).code).toBe('REVIEW_MISSING_FOCUS')
+    }
+  })
+
+  test('rejects an invalid role with review usage', () => {
+    try {
+      parseReviewArgs(['--role', 'coder', 'focus'])
+      throw new Error('expected TeamUsageError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(TeamUsageError)
+      expect((error as TeamUsageError).code).toBe('REVIEW_INVALID_ROLE')
+    }
+  })
+})
+
 describe('parseCancelArgs', () => {
   test('requires a dispatch id and joins multi-word reasons', () => {
     expect(parseCancelArgs(['--dispatch', 'dispatch-1', 'Direction', 'changed'])).toEqual({
@@ -204,5 +278,272 @@ describe('parseCancelArgs', () => {
       return
     }
     throw new Error('expected parseCancelArgs to throw')
+  })
+})
+
+describe('parseRecallArgs', () => {
+  test('joins query words and accepts flags in any order', () => {
+    expect(parseRecallArgs(['--limit', '5', '远程', '访问链', '--window', '1'])).toEqual({
+      limit: 5,
+      query: '远程 访问链',
+      window: 1,
+    })
+  })
+
+  test('rejects invalid numeric flags with recall usage', () => {
+    try {
+      parseRecallArgs(['远程访问链', '--limit', '-1'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('--limit must be a non-negative integer')
+      expect(message).toContain('Usage: team recall')
+      return
+    }
+    throw new Error('expected parseRecallArgs to throw')
+  })
+})
+
+describe('parseMemoryAddArgs', () => {
+  test('joins body words and accepts kind/tags in any order', () => {
+    expect(
+      parseMemoryAddArgs([
+        '--tag',
+        'remote',
+        'Use',
+        'relay',
+        'for',
+        'mobile',
+        '--kind',
+        'decision',
+        '--tag',
+        'relay',
+      ])
+    ).toEqual({
+      body: 'Use relay for mobile',
+      kind: 'decision',
+      procedureRef: null,
+      scope: 'workspace',
+      tags: ['remote', 'relay'],
+    })
+  })
+
+  test('defaults kind and scope, and accepts user procedure refs', () => {
+    expect(parseMemoryAddArgs(['pnpm', 'is', 'required'])).toEqual({
+      body: 'pnpm is required',
+      kind: 'fact',
+      procedureRef: null,
+      scope: 'workspace',
+      tags: [],
+    })
+
+    expect(
+      parseMemoryAddArgs([
+        '--scope',
+        'user',
+        '--kind',
+        'procedure_ref',
+        '--ref-type',
+        'skill',
+        '--ref-id',
+        'memory-cleanup',
+        '--ref-title',
+        'Memory cleanup',
+        'Prefer',
+        'this',
+        'workflow',
+      ])
+    ).toEqual({
+      body: 'Prefer this workflow',
+      kind: 'procedure_ref',
+      procedureRef: {
+        id: 'memory-cleanup',
+        title: 'Memory cleanup',
+        type: 'skill',
+      },
+      scope: 'user',
+      tags: [],
+    })
+  })
+
+  test('rejects unknown memory kind', () => {
+    try {
+      parseMemoryAddArgs(['bad', '--kind', 'todo'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('--kind must be one of')
+      expect(message).toContain('Usage: team memory add')
+      return
+    }
+    throw new Error('expected parseMemoryAddArgs to throw')
+  })
+
+  test('requires structured refs for procedure_ref memory', () => {
+    try {
+      parseMemoryAddArgs(['Use', 'workflow', '--kind', 'procedure_ref'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('--kind procedure_ref requires --ref-type and --ref-id')
+      return
+    }
+    throw new Error('expected parseMemoryAddArgs to throw')
+  })
+})
+
+describe('parseMemoryShowArgs', () => {
+  test('requires exactly one memory id', () => {
+    expect(parseMemoryShowArgs(['mem-1'])).toEqual({ memoryId: 'mem-1' })
+
+    try {
+      parseMemoryShowArgs([])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Missing <memory-id>')
+      expect(message).toContain('Usage: team memory show')
+      return
+    }
+    throw new Error('expected parseMemoryShowArgs to throw')
+  })
+})
+
+describe('parseMemorySearchArgs', () => {
+  test('joins query words and accepts optional limit', () => {
+    expect(parseMemorySearchArgs(['--limit', '5', '--scope', 'all', 'remote', 'relay'])).toEqual({
+      limit: 5,
+      query: 'remote relay',
+      scope: 'all',
+    })
+  })
+
+  test('rejects missing query with search usage', () => {
+    try {
+      parseMemorySearchArgs([])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Missing <query>')
+      expect(message).toContain('Usage: team memory search')
+      return
+    }
+    throw new Error('expected parseMemorySearchArgs to throw')
+  })
+
+  test('rejects invalid limit with search usage', () => {
+    try {
+      parseMemorySearchArgs(['--limit', '-1', 'remote'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('--limit must be a non-negative integer')
+      expect(message).toContain('Usage: team memory search')
+      return
+    }
+    throw new Error('expected parseMemorySearchArgs to throw')
+  })
+})
+
+describe('parseMemoryDreamShowArgs', () => {
+  test('requires exactly one dream run id', () => {
+    expect(parseMemoryDreamShowArgs(['run-1'])).toEqual({ runId: 'run-1' })
+
+    try {
+      parseMemoryDreamShowArgs([])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Missing <dream-run-id>')
+      expect(message).toContain('Usage: team memory dream show')
+      return
+    }
+    throw new Error('expected parseMemoryDreamShowArgs to throw')
+  })
+})
+
+describe('parseMemoryApplyArgs', () => {
+  test('requires run id and stdin', () => {
+    expect(parseMemoryApplyArgs(['--run', 'run-1', '--stdin'])).toEqual({ runId: 'run-1' })
+
+    try {
+      parseMemoryApplyArgs(['--run', 'run-1'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Missing --stdin')
+      expect(message).toContain('Usage: team memory apply')
+      return
+    }
+    throw new Error('expected parseMemoryApplyArgs to throw')
+  })
+
+  test('rejects missing run id and positional payloads with apply usage', () => {
+    for (const args of [
+      ['--stdin'],
+      ['--run', '--stdin'],
+      ['payload', '--run', 'run-1', '--stdin'],
+    ]) {
+      try {
+        parseMemoryApplyArgs(args)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        expect(message).toContain('Usage: team memory apply')
+        continue
+      }
+      throw new Error(`expected parseMemoryApplyArgs to throw for ${args.join(' ')}`)
+    }
+  })
+})
+
+describe('parseMemoryApplyPayload', () => {
+  test('accepts strict ops object and rejects non-ops JSON', () => {
+    expect(parseMemoryApplyPayload('{"ops":[]}')).toEqual([])
+
+    try {
+      parseMemoryApplyPayload('[]')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('stdin JSON must be an object with an ops array')
+      expect(message).toContain('Usage: team memory apply')
+      return
+    }
+    throw new Error('expected parseMemoryApplyPayload to throw')
+  })
+
+  test('rejects malformed JSON with apply usage', () => {
+    try {
+      parseMemoryApplyPayload('{not-json')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('stdin must be valid JSON')
+      expect(message).toContain('Usage: team memory apply')
+      return
+    }
+    throw new Error('expected parseMemoryApplyPayload to throw')
+  })
+})
+
+describe('parseMemoryForgetArgs', () => {
+  test('requires exactly one memory id', () => {
+    expect(parseMemoryForgetArgs(['mem-1'])).toEqual({ memoryId: 'mem-1' })
+
+    try {
+      parseMemoryForgetArgs(['mem-1', 'mem-2'])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('Expected exactly one <memory-id>')
+      expect(message).toContain('Usage: team memory forget')
+      return
+    }
+    throw new Error('expected parseMemoryForgetArgs to throw')
+  })
+})
+
+describe('decodeStdinBuffer', () => {
+  test('strips UTF-8 BOM produced by some Windows editors', () => {
+    expect(decodeStdinBuffer(Buffer.from([0xef, 0xbb, 0xbf, 0x64, 0x6f, 0x6e, 0x65]))).toBe('done')
+  })
+
+  test('decodes UTF-16LE stdin with BOM from Windows tooling', () => {
+    const body = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('完成', 'utf16le')])
+    expect(decodeStdinBuffer(body)).toBe('完成')
+  })
+
+  test('decodes UTF-16BE stdin with BOM', () => {
+    const body = Buffer.from([0xfe, 0xff, 0x00, 0x6f, 0x00, 0x6b])
+    expect(decodeStdinBuffer(body)).toBe('ok')
   })
 })

@@ -6,7 +6,8 @@ import type { TerminalRunSummary } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
-import { RenameWorkerDialog } from './RenameWorkerDialog.js'
+import { ScenarioTeamCards } from './ScenarioTeamCards.js'
+import { WorkerAvatarDialog } from './WorkerAvatarDialog.js'
 import { WorkerCard, type WorkerCardActionKind } from './WorkerCard.js'
 import { presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
 
@@ -16,11 +17,24 @@ type WorkersPaneProps = {
   onOpenShellTerminal: () => void
   onOpenWorker: (worker: TeamListItem) => void
   onRenameWorker: (worker: TeamListItem, newName: string) => Promise<{ error: string | null }>
+  onUpdateWorkerAvatar: (
+    workerId: string,
+    avatar: string | null
+  ) => Promise<{ error: string | null }>
+  /** Stop a running worker. Takes the RUN id (stop targets the PTY run, not the
+   *  agent record). Optional so callers that don't surface stop stay valid. */
+  onStopWorker?: (runId: string) => void
+  /** Restart a running worker. Takes the worker id AND its current run id so the
+   *  action can stop the old PTY then start a fresh one. */
+  onRestartWorker?: (workerId: string, runId: string) => void
   onStartWorker: (worker: TeamListItem) => void
   shellTerminalAvailable?: boolean
   startingWorkerId: string | null
   terminalRuns: TerminalRunSummary[]
   workers: TeamListItem[]
+  /** Enables the scenario-team cards in the empty state. Omitted in contexts
+   *  without a real workspace (e.g. demo fixtures). */
+  workspaceId?: string
 }
 
 const SECTION_ORDER: WorkerStatusKind[] = ['working', 'idle', 'stopped']
@@ -56,11 +70,15 @@ export const WorkersPane = ({
   onOpenShellTerminal,
   onOpenWorker,
   onRenameWorker,
+  onUpdateWorkerAvatar,
+  onStopWorker,
+  onRestartWorker,
   onStartWorker,
   shellTerminalAvailable = true,
   startingWorkerId,
   terminalRuns,
   workers,
+  workspaceId,
 }: WorkersPaneProps) => {
   const { t } = useI18n()
   const { sections, summary } = useMemo(() => summarizeWorkers(workers), [workers])
@@ -69,16 +87,30 @@ export const WorkersPane = ({
     [terminalRuns]
   )
   const [pendingDelete, setPendingDelete] = useState<TeamListItem | null>(null)
-  const [renameTarget, setRenameTarget] = useState<TeamListItem | null>(null)
-  const [renameBusy, setRenameBusy] = useState(false)
+  const [avatarWorker, setAvatarWorker] = useState<TeamListItem | null>(null)
+  const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null)
 
   const handleAction = (kind: WorkerCardActionKind, worker: TeamListItem) => {
     if (kind === 'start') {
       onStartWorker(worker)
       return
     }
+    if (kind === 'stop') {
+      const runId = runIdsByAgentId.get(worker.id)
+      if (runId) onStopWorker?.(runId)
+      return
+    }
+    if (kind === 'restart') {
+      const runId = runIdsByAgentId.get(worker.id)
+      if (runId) onRestartWorker?.(worker.id, runId)
+      return
+    }
     if (kind === 'rename') {
-      setRenameTarget(worker)
+      setEditingWorkerId(worker.id)
+      return
+    }
+    if (kind === 'avatar') {
+      setAvatarWorker(worker)
       return
     }
     if (kind === 'delete') {
@@ -92,59 +124,45 @@ export const WorkersPane = ({
     setPendingDelete(null)
   }
 
-  const submitRename = (worker: TeamListItem, newName: string) => {
-    setRenameBusy(true)
-    void onRenameWorker(worker, newName).finally(() => {
-      setRenameBusy(false)
-      setRenameTarget(null)
-    })
-  }
-
   return (
-    <div className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--bg-2)' }}>
-      <div
-        className="flex shrink-0 flex-col gap-1 px-4 pt-3 pb-2.5"
-        style={{
-          boxShadow: 'inset 0 -1px 0 var(--border)',
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="text-lg font-semibold text-pri">{t('worker.teamMembers')}</span>
-          <span className="mono inline-flex min-w-7 items-center justify-center rounded bg-3 px-2.5 py-1 text-base leading-none text-sec">
-            {workers.length}
-          </span>
-          <div className="flex-1" />
-          {shellTerminalAvailable ? (
+    <div className="workers-pane flex min-h-0 min-w-0 flex-1 flex-col" data-testid="workers-pane">
+      <div className="workers-pane__header">
+        <div className="workers-pane__title-row">
+          <span className="workers-pane__title">{t('worker.teamMembers')}</span>
+          <span className="workers-pane__count">{workers.length}</span>
+          <div className="workers-pane__actions">
+            {shellTerminalAvailable ? (
+              <button
+                type="button"
+                onClick={onOpenShellTerminal}
+                className="icon-btn icon-btn--tertiary"
+                aria-label={t('shellTerminal.openAria')}
+                data-testid="open-workspace-shell"
+              >
+                <Terminal size={14} aria-hidden /> {t('shellTerminal.open')}
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={onOpenShellTerminal}
-              className="icon-btn icon-btn--tertiary"
-              aria-label={t('shellTerminal.openAria')}
-              data-testid="open-workspace-shell"
+              onClick={onAddWorkerClick}
+              className="icon-btn icon-btn--primary"
+              data-testid="add-worker-trigger"
             >
-              <Terminal size={14} aria-hidden /> {t('shellTerminal.open')}
+              <UserPlus size={14} aria-hidden /> {t('addWorker.create')}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onAddWorkerClick}
-            className="icon-btn icon-btn--primary"
-            data-testid="add-worker-trigger"
-          >
-            <UserPlus size={14} aria-hidden /> {t('addWorker.create')}
-          </button>
+          </div>
         </div>
         {workers.length > 0 ? (
-          <div className="flex items-center gap-3 text-xs text-ter">
-            <span className="inline-flex items-center gap-1.5">
+          <div className="workers-pane__summary">
+            <span className="workers-pane__summary-item">
               <span className="status-dot status-dot--working" aria-hidden />
               <span className="text-sec">{summary.working}</span> {t('common.running')}
             </span>
-            <span className="inline-flex items-center gap-1.5">
+            <span className="workers-pane__summary-item">
               <span className="status-dot status-dot--idle" aria-hidden />
               <span className="text-sec">{summary.idle}</span> {t('common.idle')}
             </span>
-            <span className="inline-flex items-center gap-1.5">
+            <span className="workers-pane__summary-item">
               <span className="status-dot status-dot--stopped" aria-hidden />
               <span className="text-sec">{summary.stopped}</span> {t('common.stopped')}
             </span>
@@ -152,30 +170,33 @@ export const WorkersPane = ({
         ) : null}
       </div>
 
-      <div className="workers-pane-body scroll-y flex-1 px-2 py-2">
+      <div className="workers-pane-body workers-pane__body scroll-y min-h-0 min-w-0 flex-1">
         {workers.length === 0 ? (
-          <EmptyState
-            icon={<UserPlus size={28} />}
-            title={t('worker.emptyTitle')}
-            description={t('worker.emptyDesc')}
-            action={
-              <button
-                type="button"
-                onClick={onAddWorkerClick}
-                className="icon-btn icon-btn--primary"
-                data-testid="add-worker-empty"
-              >
-                <UserPlus size={14} aria-hidden /> {t('worker.emptyAdd')}
-              </button>
-            }
-          />
+          <>
+            <EmptyState
+              icon={<UserPlus size={28} />}
+              title={t('worker.emptyTitle')}
+              description={t('worker.emptyDesc')}
+              action={
+                <button
+                  type="button"
+                  onClick={onAddWorkerClick}
+                  className="icon-btn icon-btn--primary"
+                  data-testid="add-worker-empty"
+                >
+                  <UserPlus size={14} aria-hidden /> {t('worker.emptyAdd')}
+                </button>
+              }
+            />
+            {workspaceId ? <ScenarioTeamCards workspaceId={workspaceId} /> : null}
+          </>
         ) : (
           <div data-testid="worker-grid">
             {sections.map((section) => (
-              <section key={section.kind} className="mb-3 last:mb-0">
-                <div className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-ter">
-                  {t(statusKey(section.kind))}
-                  <span className="mono ml-1.5 text-ter">{section.workers.length}</span>
+              <section key={section.kind} className="worker-section">
+                <div className="worker-section__heading">
+                  <span>{t(statusKey(section.kind))}</span>
+                  <span className="worker-section__count">{section.workers.length}</span>
                 </div>
                 <ul
                   aria-label={`${t(statusKey(section.kind))} team members`}
@@ -185,7 +206,28 @@ export const WorkersPane = ({
                     <li key={worker.id}>
                       <WorkerCard
                         hasRun={runIdsByAgentId.has(worker.id)}
-                        isPending={startingWorkerId === worker.id}
+                        isPending={
+                          startingWorkerId === worker.id ||
+                          (worker.status === 'working' && !runIdsByAgentId.has(worker.id)) ||
+                          // Live run whose startup injection has not finished:
+                          // the runtime has not stamped startup_ready_at yet.
+                          (runIdsByAgentId.has(worker.id) &&
+                            worker.status !== 'stopped' &&
+                            worker.startupReadyAt == null)
+                        }
+                        isEditing={editingWorkerId === worker.id}
+                        onRenameWorker={async (w, newName) => {
+                          const nameExists = workers.some(
+                            (item) =>
+                              item.id !== w.id && item.name.toLowerCase() === newName.toLowerCase()
+                          )
+                          if (nameExists) {
+                            return { error: t('addWorker.agentExists') }
+                          }
+                          return onRenameWorker(w, newName)
+                        }}
+                        onStartEditing={() => setEditingWorkerId(worker.id)}
+                        onCancelEditing={() => setEditingWorkerId(null)}
                         onAction={handleAction}
                         onClick={onOpenWorker}
                         worker={worker}
@@ -212,12 +254,13 @@ export const WorkersPane = ({
         confirmKind="danger"
         onConfirm={confirmDelete}
       />
-      <RenameWorkerDialog
-        worker={renameTarget}
-        busy={renameBusy}
-        onClose={() => setRenameTarget(null)}
-        onSubmit={submitRename}
-      />
+      {avatarWorker ? (
+        <WorkerAvatarDialog
+          worker={avatarWorker}
+          onClose={() => setAvatarWorker(null)}
+          onSave={(avatar) => onUpdateWorkerAvatar(avatarWorker.id, avatar)}
+        />
+      ) : null}
     </div>
   )
 }

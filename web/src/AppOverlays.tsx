@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 
 import type { TeamListItem } from '../../src/shared/types.js'
 import type { useTasksFile } from './tasks/useTasksFile.js'
+import type { ChangelogEntry } from './whats-new/changelog.js'
 import type { WorkspaceCreateInput } from './workspace/workspace-create-input.js'
 
 type TasksFileApi = ReturnType<typeof useTasksFile>
@@ -11,13 +12,16 @@ const WorkspaceTaskDrawer = lazy(() =>
     default: module.WorkspaceTaskDrawer,
   }))
 )
-const AddWorkspaceDialog = lazy(() =>
-  import('./workspace/AddWorkspaceDialog.js').then((module) => ({
-    default: module.AddWorkspaceDialog,
+const AddWorkspaceFlow = lazy(() =>
+  import('./workspace/AddWorkspaceFlow.js').then((module) => ({
+    default: module.AddWorkspaceFlow,
   }))
 )
 const FirstRunWizard = lazy(() =>
   import('./wizard/FirstRunWizard.js').then((module) => ({ default: module.FirstRunWizard }))
+)
+const WhatsNewDialog = lazy(() =>
+  import('./whats-new/WhatsNewDialog.js').then((module) => ({ default: module.WhatsNewDialog }))
 )
 
 type AppOverlaysProps = {
@@ -30,6 +34,9 @@ type AppOverlaysProps = {
   taskGraphOpen: boolean
   tasksFile: TasksFileApi
   wizardOpen: boolean
+  whatsNewOpen: boolean
+  whatsNewEntries: readonly ChangelogEntry[]
+  onCloseWhatsNew: () => void
   workspacePath: string | null
   /** Workspace's active worker roster — feeds the §6.6.2 chip resolution. */
   workers?: readonly TeamListItem[]
@@ -49,6 +56,9 @@ export const AppOverlays = ({
   taskGraphOpen,
   tasksFile,
   wizardOpen,
+  whatsNewOpen,
+  whatsNewEntries,
+  onCloseWhatsNew,
   workspacePath,
   workers,
   onSelectOwner,
@@ -73,9 +83,10 @@ export const AppOverlays = ({
     ) : null}
     {addDialogTrigger > 0 ? (
       <Suspense fallback={null}>
-        <AddWorkspaceDialog
+        <AddWorkspaceFlow
           onClose={() => {}}
           onCreate={onCreateWorkspace}
+          onTryDemo={onTryDemo}
           trigger={addDialogTrigger}
         />
       </Suspense>
@@ -87,6 +98,15 @@ export const AppOverlays = ({
           onClose={onCloseWizard}
           onAddWorkspace={onAddWorkspace}
           onTryDemo={onTryDemo}
+        />
+      </Suspense>
+    ) : null}
+    {whatsNewOpen ? (
+      <Suspense fallback={null}>
+        <WhatsNewDialog
+          open={whatsNewOpen}
+          entries={[...whatsNewEntries]}
+          onClose={onCloseWhatsNew}
         />
       </Suspense>
     ) : null}

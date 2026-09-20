@@ -1,15 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import { type AgentManager, createAgentManager } from '../../src/server/agent-manager.js'
 import { createAgentRunStore } from '../../src/server/agent-run-store.js'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
@@ -156,8 +154,10 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
       )
 
       expect(new Set(runs.map((run) => run.runId)).size).toBe(1)
+      const firstRun = runs[0]
+      if (!firstRun) throw new Error('Expected a run from the concurrent start requests')
       await waitFor(() => {
-        expect(store.getLiveRun(runs[0].runId).status).toBe('running')
+        expect(store.getLiveRun(firstRun.runId).status).toBe('running')
       })
       let spawnedPid: number | undefined
       await waitFor(() => {
@@ -306,7 +306,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     db.close()
   })
 
-  test('R2.3: POST /api/team/send to a worker with no launch config returns 409 and records no send message', async () => {
+  test('R2.3: POST /api/team/send to a stopped worker with no launch config queues without auto-starting', async () => {
     const { dataDir, workspacePath } = prepareWorkspace()
     // Orchestrator needs a LIVE pty so the authz token is valid and the run is active.
     const orchScript = join(workspacePath, 'passive.js')
@@ -341,30 +341,55 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     const baseUrl = `http://127.0.0.1:${address.port}`
     const token = store.peekAgentToken(orchestrator.id)
 
-    const response = await fetch(`${baseUrl}/api/team/send`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        project_id: workspace.id,
-        from_agent_id: orchestrator.id,
-        token,
-        to: 'Alice',
-        text: 'should not be delivered',
-      }),
-    })
+    try {
+      const response = await fetch(`${baseUrl}/api/team/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: workspace.id,
+          from_agent_id: orchestrator.id,
+          token,
+          to: 'Alice',
+          text: 'should be queued',
+        }),
+      })
 
-    expect(response.status).toBe(409)
-    const body = (await response.json()) as { error: string }
-    expect(body.error).toMatch(/No worker launch config available/)
+      expect(response.status).toBe(202)
+      // #33: the parked dispatch is flagged in the response.
+      const sent = (await response.json()) as { dispatch_id: string }
+      expect(sent).toEqual({
+        dispatch_id: expect.any(String),
+        parent_dispatch_id: null,
+        root_dispatch_id: sent.dispatch_id,
+        ok: true,
+        restarted_worker: false,
+        queued: true,
+        worker_status: 'stopped',
+      })
 
-    const sendMessages = store
-      .listMessagesForRecovery(workspace.id, 0)
-      .filter((m) => m.type === 'send')
-    expect(sendMessages).toEqual([])
-    expect(store.listDispatches(workspace.id)).toEqual([])
-    expect(store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(0)
-
-    await store.close()
+      const sendMessages = store
+        .listMessagesForRecovery(workspace.id, 0)
+        .filter((m) => m.type === 'send')
+      expect(sendMessages).toContainEqual(
+        expect.objectContaining({ text: 'should be queued', to: worker.id })
+      )
+      expect(store.listDispatches(workspace.id)).toContainEqual(
+        expect.objectContaining({
+          status: 'queued',
+          text: 'should be queued',
+          toAgentId: worker.id,
+        })
+      )
+      expect(store.getActiveRunByAgentId(workspace.id, worker.id)).toBeUndefined()
+      expect(store.getWorker(workspace.id, worker.id)).toEqual(
+        expect.objectContaining({
+          pendingTaskCount: 1,
+          status: 'stopped',
+        })
+      )
+    } finally {
+      await store.close()
+    }
   })
 
   test('deleteWorker rolls back dispatch ledger when worker deletion fails in sqlite', async () => {

@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { WINDOWS_DRIVES_ROOT } from '../../src/shared/fs-browse.js'
 import type { FsBrowseResponse, FsProbeResponse, PickFolderResponse } from '../../web/src/api.js'
-import { AddWorkspaceDialog } from '../../web/src/workspace/AddWorkspaceDialog.js'
+import {
+  AddWorkspaceDialog,
+  prefersServerBrowseDefault,
+} from '../../web/src/workspace/AddWorkspaceDialog.js'
 
 /**
  * Pure-UI tests for the two-stage workspace picker. `fetch` is stubbed with
@@ -39,6 +43,18 @@ const rootBrowse: FsBrowseResponse = {
   ok: true,
 }
 
+const windowsDrivesBrowse: FsBrowseResponse = {
+  current_path: WINDOWS_DRIVES_ROOT,
+  root_path: WINDOWS_DRIVES_ROOT,
+  parent_path: null,
+  entries: [
+    { is_dir: true, is_git_repository: false, name: 'C:', path: 'C:\\' },
+    { is_dir: true, is_git_repository: false, name: 'D:', path: 'D:\\' },
+  ],
+  error: null,
+  ok: true,
+}
+
 const json = (body: unknown): Response =>
   ({
     ok: true,
@@ -52,6 +68,18 @@ const commandPresets = [
 ]
 
 type PickHandler = () => PickFolderResponse
+
+const stubNavigatorPlatform = (platform: string, userAgentDataPlatform?: string) => {
+  vi.stubGlobal('navigator', {
+    language: 'en-US',
+    platform,
+    ...(userAgentDataPlatform ? { userAgentData: { platform: userAgentDataPlatform } } : {}),
+    userAgent:
+      platform === 'Win32'
+        ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  })
+}
 
 const stubFetch = (
   pick: PickHandler,
@@ -82,8 +110,13 @@ const stubFetch = (
   return calls
 }
 
+beforeEach(() => {
+  stubNavigatorPlatform('MacIntel')
+})
+
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -192,7 +225,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
   test('probe.ok=false surfaces the error dialog with "Paste path instead" fallback', async () => {
     stubFetch(() => ({
       canceled: false,
-      error: 'Selected path is outside the Hive browse sandbox or is not a directory.',
+      error: 'Selected path is not a directory.',
       path: '/outside',
       probe: { ...sandboxProbe, ok: false, is_dir: false, path: '/outside' },
       supported: true,
@@ -200,7 +233,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
 
     const err = await screen.findByTestId('add-workspace-error')
-    expect(within(err).getByText(/outside the Hive browse sandbox/)).toBeInTheDocument()
+    expect(within(err).getByText(/not a directory/)).toBeInTheDocument()
 
     // Clicking the paste-path recovery action opens the compact confirm with
     // the paste-path fallback expanded (same state as supported=false).
@@ -434,18 +467,120 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     await screen.findByTestId('confirm-workspace-dialog')
     const pasteInput = screen.getByTestId('confirm-workspace-paste-path') as HTMLInputElement
     fireEvent.change(pasteInput, { target: { value: '/abs/path/here' } })
-    fireEvent.change(screen.getByTestId('confirm-workspace-name'), { target: { value: 'custom' } })
 
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-workspace-name')).toHaveValue('here')
+    })
     fireEvent.click(screen.getByTestId('confirm-workspace-create'))
     expect(onCreate).toHaveBeenCalledWith({
       commandPresetId: 'claude',
-      name: 'custom',
+      name: 'here',
       path: '/abs/path/here',
+    })
+  })
+
+  test('paste-path fallback strips Windows "Copy as path" double quotes before submitting', async () => {
+    stubFetch(() => ({
+      canceled: false,
+      error: null,
+      path: null,
+      probe: null,
+      supported: false,
+    }))
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    await screen.findByTestId('confirm-workspace-dialog')
+    const pasteInput = screen.getByTestId('confirm-workspace-paste-path') as HTMLInputElement
+    fireEvent.change(pasteInput, { target: { value: '  "C:\\Users\\name\\code"  ' } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-workspace-name')).toHaveValue('code')
+    })
+    fireEvent.click(screen.getByTestId('confirm-workspace-create'))
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'code',
+      path: 'C:\\Users\\name\\code',
+    })
+  })
+
+  test('paste-path fallback derives a clean name for a Windows drive root', async () => {
+    stubFetch(() => ({
+      canceled: false,
+      error: null,
+      path: null,
+      probe: null,
+      supported: false,
+    }))
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.change(screen.getByTestId('confirm-workspace-paste-path'), {
+      target: { value: 'D:\\' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-workspace-name')).toHaveValue('D')
+    })
+    fireEvent.click(screen.getByTestId('confirm-workspace-create'))
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'D',
+      path: 'D:\\',
     })
   })
 })
 
 describe('AddWorkspaceDialog — server-browse Advanced mode', () => {
+  test('Windows platform detection also honors Chromium userAgentData', () => {
+    expect(
+      prefersServerBrowseDefault({
+        platform: '',
+        userAgent: 'Mozilla/5.0 AppleWebKit/537.36',
+        userAgentData: { platform: 'Windows' },
+      })
+    ).toBe(true)
+    expect(
+      prefersServerBrowseDefault({
+        platform: 'MacIntel',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      })
+    ).toBe(false)
+  })
+
+  test('Windows clients skip the native picker and open server-browse by default', async () => {
+    stubNavigatorPlatform('Win32')
+    const calls = stubFetch(() => {
+      throw new Error('Windows default should not call /api/fs/pick-folder')
+    }, windowsDrivesBrowse)
+
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+
+    await screen.findByTestId('add-workspace-dialog')
+    expect(screen.queryByTestId('add-workspace-picking')).toBeNull()
+    expect(screen.queryByTestId('confirm-workspace-dialog')).toBeNull()
+    expect(screen.getByTestId('fs-root-path')).toHaveTextContent('This PC')
+    expect(await screen.findByTestId('fs-entry-C:')).toBeInTheDocument()
+    expect(await screen.findByTestId('fs-entry-D:')).toBeInTheDocument()
+    expect(calls).not.toContainEqual({ method: 'POST', url: '/api/fs/pick-folder' })
+  })
+
+  test('Windows clients with reduced navigator.platform still skip the native picker', async () => {
+    stubNavigatorPlatform('', 'Windows')
+    const calls = stubFetch(() => {
+      throw new Error('Windows default should not call /api/fs/pick-folder')
+    }, windowsDrivesBrowse)
+
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+
+    await screen.findByTestId('add-workspace-dialog')
+    expect(screen.queryByTestId('add-workspace-picking')).toBeNull()
+    expect(screen.getByTestId('fs-root-path')).toHaveTextContent('This PC')
+    expect(calls).not.toContainEqual({ method: 'POST', url: '/api/fs/pick-folder' })
+  })
+
   test('▸ Advanced: browse server filesystem swaps to the ServerBrowseDialog', async () => {
     stubFetch(() => ({
       canceled: false,

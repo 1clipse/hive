@@ -8,6 +8,7 @@ import {
   type OpenTargetPlatform,
   type OpenWorkspaceErrorCode,
 } from '../shared/open-targets.js'
+import { buildCmdCallCommand } from './windows-command-line.js'
 
 export type {
   OpenTargetId,
@@ -31,6 +32,7 @@ export const resolveOpenTargetPlatform = (platform: NodeJS.Platform): OpenTarget
 export interface OpenAttempt {
   command: string
   args: string[]
+  options?: ExecFileOptions
 }
 
 const macAttempts = (targetId: OpenTargetId, path: string): OpenAttempt[] => {
@@ -69,18 +71,37 @@ const linuxAttempts = (targetId: OpenTargetId, path: string): OpenAttempt[] => {
   }
 }
 
+/**
+ * Wrap a PATHEXT-dependent shim (`code.cmd`, `cursor.cmd`, etc.) in cmd.exe
+ * so Windows resolves the `.cmd` extension. `execFile` does not consult
+ * PATHEXT and cannot launch `.cmd` files directly, so a bare `code` argv
+ * returns ENOENT even when VSCode is installed.
+ *
+ * `cmd.exe /d /s /c` parses the trailing command line. Build that command
+ * with cmd-aware escaping instead of separate argv entries so path metachars
+ * (`&`, `|`, `%`, etc.) remain data rather than syntax.
+ */
+const cmdExeShimAttempt = (bin: string, path: string): OpenAttempt => ({
+  command: 'cmd.exe',
+  args: ['/d', '/s', '/c', buildCmdCallCommand(bin, [path])],
+  options: { windowsHide: true },
+})
+
 const windowsAttempts = (targetId: OpenTargetId, path: string): OpenAttempt[] => {
   switch (targetId) {
     case 'finder':
+      // explorer.exe is a real PE binary; the existing exit-code-1 success
+      // heuristic in classifyFailure depends on the spawn going directly to
+      // explorer, so do NOT wrap this in cmd.exe.
       return [{ command: 'explorer', args: [path] }]
     case 'vscode':
-      return [{ command: 'code', args: [path] }]
+      return [cmdExeShimAttempt('code', path)]
     case 'vscode-insiders':
-      return [{ command: 'code-insiders', args: [path] }]
+      return [cmdExeShimAttempt('code-insiders', path)]
     case 'cursor':
-      return [{ command: 'cursor', args: [path] }]
+      return [cmdExeShimAttempt('cursor', path)]
     case 'zed':
-      return [{ command: 'zed', args: [path] }]
+      return [cmdExeShimAttempt('zed', path)]
     default:
       return [{ command: 'explorer', args: [path] }]
   }
@@ -157,10 +178,18 @@ const APP_NOT_INSTALLED_PATTERNS = [
   /can'?t find/i,
   /not authorized to send keystrokes/i,
   /application can'?t be found/i,
+  // Windows: when cmd.exe can't resolve the .cmd shim (e.g. VSCode not
+  // installed), it prints this message to stderr and exits non-zero. We
+  // wrap editor invocations in `cmd /d /s /c` so the spawn itself always
+  // succeeds (cmd.exe is always present); the missing-binary signal is in
+  // the stderr text, not in spawn ENOENT.
+  /is not recognized as an internal or external command/i,
+  /不是内部或外部命令/, // zh-CN Windows localization of the above
 ]
 
 const classifyFailure = (result: SpawnResult): OpenWorkspaceErrorCode => {
   if (result.spawnError?.code === 'ENOENT') return 'command-not-in-path'
+  if (result.status === 9009) return 'app-not-installed'
   const stderr = result.stderr.toLowerCase()
   if (APP_NOT_INSTALLED_PATTERNS.some((re) => re.test(stderr))) return 'app-not-installed'
   return 'unknown'
@@ -222,7 +251,7 @@ export const openWorkspace = async (
 
   let lastFailure: SpawnResult | null = null
   for (const attempt of attempts) {
-    const result = await run(attempt.command, attempt.args, {})
+    const result = await run(attempt.command, attempt.args, attempt.options ?? {})
 
     // Windows `explorer.exe` returns exit code 1 even on success — checking
     // exit code here would surface a spurious error to the user on every

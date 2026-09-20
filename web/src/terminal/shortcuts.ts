@@ -16,6 +16,7 @@
 export type TerminalShortcutAction =
   | { kind: 'send'; bytes: string }
   | { kind: 'clear' }
+  | { kind: 'copy' }
   | { kind: 'block' }
   | { kind: 'passthrough' }
 
@@ -49,7 +50,7 @@ export const SHORTCUT_BYTES = {
 
 export const resolveTerminalShortcut = (
   event: KeyboardEvent,
-  options: { isMac?: boolean } = {}
+  options: { isMac?: boolean; hasSelection?: boolean } = {}
 ): TerminalShortcutAction => {
   const isMac = options.isMac ?? isMacPlatform()
 
@@ -59,6 +60,25 @@ export const resolveTerminalShortcut = (
     return event.type === 'keypress'
       ? { kind: 'send', bytes: SHORTCUT_BYTES.shiftEnter }
       : { kind: 'block' }
+  }
+
+  // Windows/Linux convention: Ctrl+C copies the active selection instead of
+  // killing the process. macOS copies with Cmd+C (handled natively by the
+  // browser) and keeps Ctrl+C as interrupt, so this only fires off-mac. With
+  // no selection we fall through to passthrough → xterm still emits \x03, so
+  // Ctrl+C interrupts the agent as usual. shiftKey is excluded so capslock'd
+  // 'C' still maps but explicit Ctrl+Shift+C does not collide here.
+  if (
+    !isMac &&
+    event.type === 'keydown' &&
+    event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    (event.key === 'c' || event.key === 'C') &&
+    options.hasSelection
+  ) {
+    return { kind: 'copy' }
   }
 
   if (!isMac || event.type !== 'keydown') return { kind: 'passthrough' }

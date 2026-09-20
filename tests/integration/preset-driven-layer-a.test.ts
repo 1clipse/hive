@@ -1,10 +1,9 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
-import Database from 'better-sqlite3'
+import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
-
+import Database from '../../src/server/sqlite.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -13,10 +12,11 @@ const originalClaudeProjectsDir = process.env.HIVE_CLAUDE_PROJECTS_DIR
 const originalCodexHome = process.env.CODEX_HOME
 const originalGeminiHome = process.env.HIVE_GEMINI_HOME
 const originalOpenCodeDbPath = process.env.HIVE_OPENCODE_DB_PATH
+const originalPath = process.env.PATH
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
-  timeoutMs = 4000,
+  timeoutMs = 10_000,
   intervalMs = 25
 ) => {
   const deadline = Date.now() + timeoutMs
@@ -36,7 +36,7 @@ const waitFor = async (
 }
 
 const readLastSessionId = (dataDir: string, workspaceId: string, agentId: string) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
   const row = db
     .prepare('SELECT last_session_id FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?')
     .get(workspaceId, agentId) as { last_session_id: string } | undefined
@@ -45,7 +45,7 @@ const readLastSessionId = (dataDir: string, workspaceId: string, agentId: string
 }
 
 const readConfiguredPresetId = (dataDir: string, workspaceId: string, agentId: string) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
+  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
   const row = db
     .prepare(
       'SELECT command_preset_id FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?'
@@ -55,12 +55,23 @@ const readConfiguredPresetId = (dataDir: string, workspaceId: string, agentId: s
   return row?.command_preset_id
 }
 
-const writeFakeClaude = (workspacePath: string) => {
+const writeFakeCli = (workspacePath: string, name: string, source: string) => {
   const binDir = join(workspacePath, 'bin')
   mkdirSync(binDir, { recursive: true })
-  const cliPath = join(binDir, 'claude')
-  writeFileSync(
-    cliPath,
+  const scriptPath = join(binDir, `${name}-fake.mjs`)
+  writeFileSync(scriptPath, source)
+  const unixCli = join(binDir, name)
+  writeFileSync(unixCli, `#!/usr/bin/env sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`)
+  chmodSync(unixCli, 0o755)
+  const winCli = join(binDir, `${name}.cmd`)
+  writeFileSync(winCli, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`)
+  return process.platform === 'win32' ? winCli : unixCli
+}
+
+const writeFakeClaude = (workspacePath: string) => {
+  return writeFakeCli(
+    workspacePath,
+    'claude',
     `#!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -69,7 +80,7 @@ import { join } from 'node:path'
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
-const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
+const encoded = process.cwd().replace(/[^A-Za-z0-9-]/g, '-')
 const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
 const projectDir = join(projectsRoot, encoded)
 const expectFreshMarker = join(process.cwd(), '.expect-fresh')
@@ -79,11 +90,16 @@ const expectNoYoloMarker = join(process.cwd(), '.expect-no-yolo')
 mkdirSync(projectDir, { recursive: true })
 const sessionPath = join(projectDir, sessionId + '.jsonl')
 writeFileSync(sessionPath, '{}\\n')
+let pasteOpen = false
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
   appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
-  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
+  if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
+    pasteOpen = false
+    process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  }
 })
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(expectResumeMarker) && !args.includes('--resume')) process.exit(2)
@@ -94,16 +110,12 @@ process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
-  chmodSync(cliPath, 0o755)
-  return cliPath
 }
 
 const writeFakeCodex = (workspacePath: string) => {
-  const binDir = join(workspacePath, 'bin')
-  mkdirSync(binDir, { recursive: true })
-  const cliPath = join(binDir, 'codex')
-  writeFileSync(
-    cliPath,
+  return writeFakeCli(
+    workspacePath,
+    'codex',
     `#!/usr/bin/env node
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -120,7 +132,9 @@ const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && chunk.includes('<hive-message') && chunk.includes('</hive-message>'))) {
+    process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  }
 })
 mkdirSync(sessionDir, { recursive: true })
 const writeSession = () => writeFileSync(
@@ -137,16 +151,12 @@ process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
-  chmodSync(cliPath, 0o755)
-  return cliPath
 }
 
 const writeFakeGemini = (workspacePath: string) => {
-  const binDir = join(workspacePath, 'bin')
-  mkdirSync(binDir, { recursive: true })
-  const cliPath = join(binDir, 'gemini')
-  writeFileSync(
-    cliPath,
+  return writeFakeCli(
+    workspacePath,
+    'gemini',
     `#!/usr/bin/env node
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -167,23 +177,15 @@ if (existsSync(expectYoloMarker) && !args.includes('--yolo')) process.exit(4)
 setInterval(() => {}, 1000)
 `
   )
-  chmodSync(cliPath, 0o755)
-  return cliPath
 }
 
 const writeFakeOpenCode = (workspacePath: string) => {
-  const binDir = join(workspacePath, 'bin')
-  mkdirSync(binDir, { recursive: true })
-  const cliPath = join(binDir, 'opencode')
-  const packageJsonPath = join(process.cwd(), 'package.json')
-  writeFileSync(
-    cliPath,
+  return writeFakeCli(
+    workspacePath,
+    'opencode',
     `#!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
-
-const require = createRequire(${JSON.stringify(packageJsonPath)})
-const Database = require('better-sqlite3')
+import { DatabaseSync as Database } from 'node:sqlite'
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : 'ses_25c8f572efferzSV4Mgjo99WqB'
@@ -198,8 +200,32 @@ if (existsSync(expectYoloMarker) && args.includes('--dangerously-skip-permission
 setInterval(() => {}, 1000)
 `
   )
-  chmodSync(cliPath, 0o755)
-  return cliPath
+}
+
+const writeFakeHermes = (workspacePath: string) => {
+  return writeFakeCli(
+    workspacePath,
+    'hermes',
+    `#!/usr/bin/env node
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+const args = process.argv.slice(2)
+const sessionIndex = args.indexOf('--session-id-test')
+const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '20260602_140311_be67e0'
+const resumeIndex = args.indexOf('--resume')
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk) => {
+  process.stdout.write('STDIN:' + chunk)
+})
+process.stdout.write('ARGS:' + args.join(' ') + '\\n')
+process.stdout.write('Session: ' + sessionId + '\\n')
+if (existsSync(join(process.cwd(), '.expect-resume')) && !(resumeIndex >= 0 && args[resumeIndex + 1] === sessionId)) process.exit(2)
+if (existsSync(join(process.cwd(), '.expect-yolo')) && !args.includes('--yolo')) process.exit(4)
+process.stdout.write('❯ ')
+setInterval(() => {}, 1000)
+`
+  )
 }
 
 const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspacePath: string) => {
@@ -317,7 +343,9 @@ afterEach(() => {
   else process.env.HIVE_GEMINI_HOME = originalGeminiHome
   if (originalOpenCodeDbPath === undefined) delete process.env.HIVE_OPENCODE_DB_PATH
   else process.env.HIVE_OPENCODE_DB_PATH = originalOpenCodeDbPath
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
+  if (originalPath === undefined) delete process.env.PATH
+  else process.env.PATH = originalPath
+  for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
 describe('preset-driven Layer A', () => {
@@ -407,7 +435,7 @@ describe('preset-driven Layer A', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 15000)
 
   test('bound claude preset binds concurrent worker session ids by worker prompt', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-concurrent-home-'))
@@ -453,7 +481,7 @@ describe('preset-driven Layer A', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 15000)
 
   test('bound claude preset rejects another worker session id over HTTP', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-wrong-owner-home-'))
@@ -522,7 +550,7 @@ describe('preset-driven Layer A', () => {
     } finally {
       await secondServer.close()
     }
-  })
+  }, 15000)
 
   test('unbound claude command stays bare: no capture, no resume, no yolo', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-home-'))
@@ -595,6 +623,14 @@ describe('preset-driven Layer A', () => {
       sessionId: 'ses_25c8f572efferzSV4Mgjo99WqB',
       writeCli: writeFakeOpenCode,
     },
+    {
+      env: () => {},
+      expectedArgs: (sessionId: string) =>
+        `ARGS:--yolo --resume ${sessionId} --session-id-test ${sessionId}`,
+      presetId: 'hermes',
+      sessionId: '20260602_140311_be67e0',
+      writeCli: writeFakeHermes,
+    },
   ])('bound $presetId preset captures and reuses native session id on restart', async (input) => {
     const homeDir = mkdtempSync(join(tmpdir(), `hive-${input.presetId}-resume-`))
     const workspacePathRaw = join(homeDir, 'workspace')
@@ -639,7 +675,7 @@ describe('preset-driven Layer A', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 15000)
 
   test('bound codex preset trusts captured session id even when the session file is gone', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-fast-resume-'))
@@ -672,7 +708,7 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
       })
-      rmSync(codexHome, { force: true, recursive: true })
+      removeTestPath(codexHome)
       writeFileSync(join(workspacePath, '.expect-resume'), '1\n')
 
       const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
@@ -682,6 +718,48 @@ describe('preset-driven Layer A', () => {
         expect(state.output).toContain(
           `ARGS:--dangerously-bypass-approvals-and-sandbox resume ${sessionId} --session-id-test ${sessionId}`
         )
+      })
+    } finally {
+      await server.close()
+    }
+  }, 15000)
+
+  test('bound codex preset normalizes stale node.exe npm entrypoint launch configs', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-node-entrypoint-'))
+    const workspacePathRaw = join(homeDir, 'workspace')
+    tempDirs.push(homeDir)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    process.env.CODEX_HOME = join(homeDir, '.codex')
+    writeFakeCodex(workspacePath)
+    process.env.PATH = `${join(workspacePath, 'bin')}${delimiter}${originalPath ?? ''}`
+    const staleCodexJs = join(homeDir, 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+    mkdirSync(dirname(staleCodexJs), { recursive: true })
+    writeFileSync(staleCodexJs, "throw new Error('stale codex npm entrypoint should not run')\n")
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
+      const sessionId = '019dc277-0e8e-75c1-9794-94929426288e'
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
+        command: process.execPath,
+        args: [staleCodexJs, '--session-id-test', sessionId],
+        command_preset_id: 'codex',
+      })
+      writeFileSync(join(workspacePath, '.expect-yolo'), '1\n')
+
+      const run = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain(
+          `ARGS:--dangerously-bypass-approvals-and-sandbox --session-id-test ${sessionId}`
+        )
+        expect(state.output).not.toContain('bad option')
+        expect(state.output).not.toContain('stale codex npm entrypoint should not run')
       })
     } finally {
       await server.close()

@@ -1,7 +1,7 @@
 {
   "name": "Hive — Multi-agent CLI workbench",
   "short_name": "Hive",
-  "description": "Browser-native multi-CLI agent collaboration workbench. Coordinate Claude Code, Codex, Gemini, OpenCode as a real PTY team.",
+  "description": "Browser-native multi-CLI agent collaboration workbench. Coordinate real CLI agents as a visible PTY team.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -22,8 +22,9 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve, sep } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { gunzipSync } from 'node:zlib'
 
 import matter from 'gray-matter'
 
@@ -48,6 +49,15 @@ const EXCLUDED_TOPLEVEL = new Set([
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(__dirname, '..')
 const vendorRoot = join(repoRoot, 'vendor', 'marketplace')
+
+const removePath = (path) => {
+  rmSync(path, {
+    force: true,
+    maxRetries: process.platform === 'win32' ? 20 : 0,
+    recursive: true,
+    retryDelay: 100,
+  })
+}
 
 const parseArgs = () => {
   const args = process.argv.slice(2)
@@ -167,13 +177,111 @@ const downloadTarball = (owner, repo, sha, targetPath) => {
   writeFileSync(targetPath, result.stdout)
 }
 
-const extractTarball = (tarballPath, destDir) => {
-  const result = spawnSync('tar', ['-xz', '-f', tarballPath, '-C', destDir], {
-    stdio: 'inherit',
-  })
-  if (result.status !== 0) {
-    throw new Error(`tar extract failed for ${tarballPath}`)
+const trimNull = (value) => value.replace(/\0.*$/, '')
+
+const readTarString = (buffer, start, length) =>
+  trimNull(buffer.toString('utf8', start, start + length)).trim()
+
+const readTarSize = (buffer, offset) => {
+  const raw = readTarString(buffer, offset, 12)
+  if (!raw) return 0
+  const parsed = Number.parseInt(raw, 8)
+  if (!Number.isFinite(parsed)) throw new Error(`Invalid tar entry size: ${raw}`)
+  return parsed
+}
+
+const parsePaxRecords = (buffer) => {
+  const values = {}
+  let offset = 0
+  while (offset < buffer.length) {
+    const space = buffer.indexOf(0x20, offset)
+    if (space === -1) break
+    const length = Number.parseInt(buffer.toString('ascii', offset, space), 10)
+    if (!Number.isFinite(length) || length <= 0) break
+    const recordEnd = offset + length
+    if (recordEnd > buffer.length) throw new Error('Invalid pax record length')
+    const recordDataEnd = buffer[recordEnd - 1] === 0x0a ? recordEnd - 1 : recordEnd
+    const record = buffer.subarray(space + 1, recordDataEnd).toString('utf8')
+    const equals = record.indexOf('=')
+    if (equals > 0) values[record.slice(0, equals)] = record.slice(equals + 1)
+    offset += length
   }
+  return values
+}
+
+const resolveTarEntryPath = (destDir, entryPath) => {
+  if (!entryPath || entryPath.startsWith('/') || /^[A-Za-z]:/.test(entryPath)) {
+    throw new Error(`Unsafe tar entry path: ${entryPath}`)
+  }
+  const targetPath = resolve(destDir, ...entryPath.split('/').filter(Boolean))
+  const rootPath = resolve(destDir)
+  const rootWithSep = rootPath.endsWith(sep) ? rootPath : `${rootPath}${sep}`
+  if (targetPath !== rootPath && !targetPath.startsWith(rootWithSep)) {
+    throw new Error(`Unsafe tar entry path: ${entryPath}`)
+  }
+  return targetPath
+}
+
+const readTarEntryName = (header, pendingPaxPath, pendingLongName) => {
+  if (pendingPaxPath) return pendingPaxPath
+  if (pendingLongName) return pendingLongName
+  const name = readTarString(header, 0, 100)
+  const prefix = readTarString(header, 345, 155)
+  return prefix ? `${prefix}/${name}` : name
+}
+
+const extractTarball = (tarballPath, destDir) => {
+  const archive = gunzipSync(readFileSync(tarballPath))
+  let offset = 0
+  let pendingPaxPath = ''
+  let pendingLongName = ''
+
+  while (offset + 512 <= archive.length) {
+    const header = archive.subarray(offset, offset + 512)
+    offset += 512
+    if (header.every((byte) => byte === 0)) break
+
+    const size = readTarSize(header, 124)
+    const type = header.toString('utf8', 156, 157) || '0'
+    const dataStart = offset
+    const dataEnd = dataStart + size
+    const data = archive.subarray(dataStart, dataEnd)
+    offset += Math.ceil(size / 512) * 512
+
+    if (dataEnd > archive.length) {
+      throw new Error(`Truncated tar entry in ${tarballPath}`)
+    }
+
+    if (type === 'x') {
+      const pax = parsePaxRecords(data)
+      pendingPaxPath = typeof pax.path === 'string' ? pax.path : ''
+      continue
+    }
+    if (type === 'g') continue
+    if (type === 'L') {
+      pendingLongName = trimNull(data.toString('utf8'))
+      continue
+    }
+    if (type === 'K') continue
+
+    const entryPath = readTarEntryName(header, pendingPaxPath, pendingLongName)
+    pendingPaxPath = ''
+    pendingLongName = ''
+    const targetPath = resolveTarEntryPath(destDir, entryPath)
+
+    if (type === '5') {
+      mkdirSync(targetPath, { recursive: true })
+      continue
+    }
+    if (type === '0' || type === '\0') {
+      mkdirSync(dirname(targetPath), { recursive: true })
+      writeFileSync(targetPath, data)
+      continue
+    }
+    if (type === '2') continue
+    throw new Error(`Unsupported tar entry type "${type}" for ${entryPath}`)
+  }
+
   const entries = readdirSync(destDir).filter((entry) => {
     const stat = statSync(join(destDir, entry))
     return stat.isDirectory()
@@ -257,7 +365,7 @@ const syncOne = async (lang, options) => {
 
     const agents = []
     const stagingDir = join(vendorRoot, `.tmp-${lang}`)
-    if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
+    if (existsSync(stagingDir)) removePath(stagingDir)
     mkdirSync(stagingDir, { recursive: true })
 
     let parseFailures = 0
@@ -333,20 +441,20 @@ const syncOne = async (lang, options) => {
     if (options.dryRun) {
       console.log(`[${lang}] dry-run: would write ${agents.length} agents to ${vendorRoot}/${lang}`)
       console.log(`[${lang}] dry-run: ${parseFailures} files would be skipped`)
-      rmSync(stagingDir, { recursive: true, force: true })
+      removePath(stagingDir)
       return
     }
 
     // Atomic swap: remove old, rename staging
     const finalDir = join(vendorRoot, lang)
-    if (existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true })
+    if (existsSync(finalDir)) removePath(finalDir)
     renameSync(stagingDir, finalDir)
 
     console.log(
       `[${lang}] wrote ${agents.length} agents${parseFailures > 0 ? ` (${parseFailures} skipped)` : ''} → ${finalDir}`
     )
   } finally {
-    rmSync(tempBase, { recursive: true, force: true })
+    removePath(tempBase)
   }
 }
 
@@ -362,7 +470,11 @@ const main = async () => {
   console.log(`\n✓ sync complete${options.dryRun ? ' (dry-run)' : ''}`)
 }
 
-main().catch((error) => {
-  console.error(`✗ sync failed: ${error?.message ?? error}`)
-  process.exit(1)
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(`✗ sync failed: ${error?.message ?? error}`)
+    process.exit(1)
+  })
+}
+
+export { extractTarball }

@@ -69,7 +69,7 @@ const PushNotification = () => {
       onClick={() =>
         notify({
           brief: 'ember-check-23 reported',
-          detail: 'ember-check-23 reported in mco; 0 queued task(s) remain.',
+          detail: 'ember-check-23 reported in mco.',
           kind: 'success',
           title: 'Member report',
         })
@@ -149,12 +149,10 @@ describe('notification settings', () => {
 
     fireEvent.click(screen.getByTestId('notify'))
 
-    expect(screen.getByTestId('toast')).toHaveTextContent(
-      'ember-check-23 reported in mco; 0 queued task(s) remain.'
-    )
+    expect(screen.getByTestId('toast')).toHaveTextContent('ember-check-23 reported in mco.')
     expect(notifications).toEqual([
       {
-        body: 'ember-check-23 reported in mco; 0 queued task(s) remain.',
+        body: 'ember-check-23 reported in mco.',
         title: 'Member report',
       },
     ])

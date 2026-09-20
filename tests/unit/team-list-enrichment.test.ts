@@ -2,7 +2,11 @@ import { describe, expect, test, vi } from 'vitest'
 
 import type { AgentLaunchConfigInput } from '../../src/server/agent-run-store.js'
 import type { RuntimeStore } from '../../src/server/runtime-store.js'
-import { enrichTeamList, resolveCommandPresetId } from '../../src/server/team-list-enrichment.js'
+import {
+  enrichTeamList,
+  resolveCommandPresetId,
+  type TeamListEnrichmentStore,
+} from '../../src/server/team-list-enrichment.js'
 import type { TeamListItem } from '../../src/shared/types.js'
 
 /**
@@ -153,5 +157,22 @@ describe('enrichTeamList', () => {
     const [result] = enrichTeamList('ws-1', store, [worker({ id: 'w-1' })])
     expect(result?.lastPtyLine).toBe('Editing src/index.ts (line 12)')
     expect(result?.commandPresetId).toBe('opencode')
+  })
+
+  test('copies startupReadyAt from the live run and stays null without one', () => {
+    const readyAt = 1_700_000_123_000
+    const store = {
+      ...makeStore({ launchConfigs: new Map() }),
+      getActiveRunByAgentId: (_workspaceId: string, agentId: string) =>
+        agentId === 'w-ready' ? { startupReadyAt: readyAt } : { startupReadyAt: null },
+    } as TeamListEnrichmentStore
+    const [ready] = enrichTeamList('ws-1', store, [worker({ id: 'w-ready' })])
+    const [idle] = enrichTeamList('ws-1', store, [worker({ id: 'w-idle' })])
+    const [absent] = enrichTeamList('ws-1', makeStore({ launchConfigs: new Map() }), [
+      worker({ id: 'w-none' }),
+    ])
+    expect(ready?.startupReadyAt).toBe(readyAt)
+    expect(idle?.startupReadyAt).toBeNull()
+    expect(absent?.startupReadyAt).toBeNull()
   })
 })

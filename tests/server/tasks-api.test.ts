@@ -10,15 +10,19 @@ import { createTasksFileService } from '../../src/server/tasks-file.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
-const servers: Array<{ close: () => void }> = []
+const servers: Array<{ close: () => Promise<void> }> = []
 
-afterEach(() => {
+afterEach(async () => {
   while (servers.length > 0) {
-    servers.pop()?.close()
+    await servers.pop()?.close()
   }
 
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    rmSync(dir, {
+      force: true,
+      maxRetries: process.platform === 'win32' ? 20 : 0,
+      recursive: true,
+    })
   }
 })
 
@@ -38,7 +42,12 @@ const startServer = async () => {
     app.server.listen(0, '127.0.0.1', () => resolve())
   })
 
-  servers.push(app.server)
+  servers.push({
+    async close() {
+      await store.close()
+      await new Promise<void>((resolve) => app.server.close(() => resolve()))
+    },
+  })
 
   const address = app.server.address()
   if (!address || typeof address === 'string') {

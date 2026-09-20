@@ -19,6 +19,11 @@ const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
 beforeEach(async () => {
+  vi.stubGlobal('navigator', {
+    language: 'en-US',
+    platform: 'MacIntel',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  })
   window.localStorage.setItem('hive.first-run-seen', '1')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-fs-sandbox-'))
   mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
@@ -54,6 +59,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
@@ -70,7 +76,9 @@ describe('workspace flow with real server', () => {
     await waitFor(() => {
       expect(screen.getByText('No Workspaces')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
+    fireEvent.click(
+      within(screen.getByTestId('empty-state')).getByRole('button', { name: 'New Workspace' })
+    )
 
     // User-triggered pick-folder → mock returns the sandbox dir → compact confirm opens.
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
@@ -128,12 +136,9 @@ describe('workspace flow with real server', () => {
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
     expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('topbar-blueprint')).toBeInTheDocument()
-    const drawer = await screen.findByTestId('task-graph-drawer')
-    expect(drawer).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByTestId('task-graph-drawer')).toBeNull()
     fireEvent.click(screen.getByTestId('topbar-blueprint'))
-    await waitFor(() => {
-      expect(drawer).toHaveAttribute('aria-hidden', 'false')
-    })
+    expect(await screen.findByTestId('task-graph-drawer')).toBeInTheDocument()
   }, 20_000)
 
   test('existing workspace stays stopped until the user starts Queen', async () => {

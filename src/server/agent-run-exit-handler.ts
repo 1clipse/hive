@@ -1,19 +1,11 @@
 import type { AgentRunExitContext } from './agent-run-start-context.js'
 import { completeLiveRun } from './agent-run-sync.js'
+import { clearResumedSessionAfterExitIfStale } from './resumed-session-cleanup.js'
 
 interface HandleRunExitInput {
   exitCode: number | null
   endedAt: number
   runId: string
-}
-
-const clearResumedSessionOnFailure = (
-  context: Pick<AgentRunExitContext, 'agentId' | 'sessionStore' | 'startConfig' | 'workspace'>,
-  exitCode: number | null
-) => {
-  if (exitCode !== 0 && context.startConfig.resumedSessionId) {
-    context.sessionStore.clearLastSessionId(context.workspace.id, context.agentId)
-  }
 }
 
 export const handleAgentRunExit = (
@@ -31,12 +23,15 @@ export const handleAgentRunExit = (
     return false
   }
 
-  completeLiveRun(liveRun, exitCode, endedAt, context.store)
-  clearResumedSessionOnFailure(context, exitCode)
   context.handledRunExits.add(runId)
-  context.tokenRegistry.revokeIfMatches(context.agentId, context.token)
-  context.onAgentExit(context.workspace.id, context.agentId)
-  context.registry.resolveExit(runId)
-  context.registry.clearPendingExitCode(runId)
-  return true
+  try {
+    completeLiveRun(liveRun, exitCode, endedAt, context.store)
+    if (!liveRun.userStopped) clearResumedSessionAfterExitIfStale({ ...context, exitCode })
+    context.onAgentExit(context.workspace.id, context.agentId)
+    return true
+  } finally {
+    context.tokenRegistry.revokeIfMatches(context.agentId, context.token)
+    context.registry.resolveExit(runId)
+    context.registry.clearPendingExitCode(runId)
+  }
 }

@@ -1,13 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { TeamListItem } from '../../src/shared/types.js'
 import { listWorkers } from './api.js'
 
-const REFRESH_INTERVAL_MS = 500
+const ACTIVE_REFRESH_INTERVAL_MS = 500
+const BACKGROUND_REFRESH_INTERVAL_MS = 5000
 const MAX_REFRESH_INTERVAL_MS = 5000
 
-const getRefreshDelay = (failureCount: number) =>
-  Math.min(REFRESH_INTERVAL_MS * 2 ** failureCount, MAX_REFRESH_INTERVAL_MS)
+interface UseWorkspaceWorkersOptions {
+  activeWorkspaceId?: string | null
+}
+
+interface WorkspacePollState {
+  failureCount: number
+  inFlight: boolean
+  lastSettledAt: number | null
+}
+
+const createPollState = (): WorkspacePollState => ({
+  failureCount: 0,
+  inFlight: false,
+  lastSettledAt: null,
+})
+
+const getRefreshDelay = (failureCount: number, active: boolean) => {
+  const base = active ? ACTIVE_REFRESH_INTERVAL_MS : BACKGROUND_REFRESH_INTERVAL_MS
+  return Math.min(base * 2 ** failureCount, MAX_REFRESH_INTERVAL_MS)
+}
 
 const areWorkersEqual = (a: TeamListItem[], b: TeamListItem[]): boolean => {
   if (a.length !== b.length) return false
@@ -15,11 +34,14 @@ const areWorkersEqual = (a: TeamListItem[], b: TeamListItem[]): boolean => {
     const other = b[index]
     return (
       other !== undefined &&
+      worker.avatar === other.avatar &&
+      worker.commandPresetId === other.commandPresetId &&
       worker.id === other.id &&
       worker.lastPtyLine === other.lastPtyLine &&
       worker.name === other.name &&
       worker.pendingTaskCount === other.pendingTaskCount &&
       worker.role === other.role &&
+      worker.startupReadyAt === other.startupReadyAt &&
       worker.status === other.status
     )
   })
@@ -32,64 +54,136 @@ const areWorkerMapsEqual = (
   const aKeys = Object.keys(a)
   const bKeys = Object.keys(b)
   if (aKeys.length !== bKeys.length) return false
-  return bKeys.every((workspaceId) => areWorkersEqual(a[workspaceId] ?? [], b[workspaceId] ?? []))
+  return bKeys.every(
+    (workspaceId) =>
+      Object.hasOwn(a, workspaceId) && areWorkersEqual(a[workspaceId] ?? [], b[workspaceId] ?? [])
+  )
 }
 
-export const useWorkspaceWorkers = (workspaceIds: readonly string[]) => {
+export const useWorkspaceWorkers = (
+  workspaceIds: readonly string[],
+  options: UseWorkspaceWorkersOptions = {}
+) => {
   const workspaceKey = workspaceIds.join('\0')
+  const activeWorkspaceIdRef = useRef<string | null | undefined>(options.activeWorkspaceId)
+  const pollStatesRef = useRef(new Map<string, WorkspacePollState>())
+  const wakePollerRef = useRef<(() => void) | null>(null)
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useState<Record<string, TeamListItem[]>>(
     {}
   )
 
+  activeWorkspaceIdRef.current = options.activeWorkspaceId
+
   useEffect(() => {
     if (!workspaceKey) {
       setWorkersByWorkspaceId({})
+      pollStatesRef.current.clear()
       return
     }
     let cancelled = false
-    let inFlight = false
-    let failureCount = 0
     let timeout: number | undefined
     const ids = workspaceKey.split('\0')
-    const scheduleNextLoad = () => {
-      if (!cancelled) timeout = window.setTimeout(loadWorkers, getRefreshDelay(failureCount))
+    const idSet = new Set(ids)
+
+    for (const workspaceId of pollStatesRef.current.keys()) {
+      if (!idSet.has(workspaceId)) pollStatesRef.current.delete(workspaceId)
     }
-    const loadWorkers = () => {
-      if (inFlight) return
-      inFlight = true
-      void Promise.all(
-        ids.map(async (workspaceId) => {
-          try {
-            return [workspaceId, await listWorkers(workspaceId)] as const
-          } catch (error) {
-            console.error('[hive] swallowed:workspaceWorkers.list', error)
-            return null
-          }
-        })
-      )
-        .then((results) => {
+    setWorkersByWorkspaceId((current) => {
+      const next: Record<string, TeamListItem[]> = {}
+      for (const workspaceId of ids) next[workspaceId] = current[workspaceId] ?? []
+      return areWorkerMapsEqual(current, next) ? current : next
+    })
+
+    const pollStateFor = (workspaceId: string) => {
+      let state = pollStatesRef.current.get(workspaceId)
+      if (!state) {
+        state = createPollState()
+        pollStatesRef.current.set(workspaceId, state)
+      }
+      return state
+    }
+
+    const isActiveWorkspace = (workspaceId: string) => activeWorkspaceIdRef.current === workspaceId
+
+    const loadWorkspace = (workspaceId: string) => {
+      const state = pollStateFor(workspaceId)
+      if (state.inFlight) return
+      state.inFlight = true
+      void listWorkers(workspaceId)
+        .then((workers) => {
           if (cancelled) return
-          failureCount = results.some(Boolean) ? 0 : Math.min(failureCount + 1, 4)
+          state.failureCount = 0
           setWorkersByWorkspaceId((current) => {
+            if (!idSet.has(workspaceId)) return current
             const next: Record<string, TeamListItem[]> = {}
-            for (const workspaceId of ids) next[workspaceId] = current[workspaceId] ?? []
-            for (const result of results) {
-              if (result) next[result[0]] = result[1]
-            }
+            for (const id of ids) next[id] = id === workspaceId ? workers : (current[id] ?? [])
             return areWorkerMapsEqual(current, next) ? current : next
           })
         })
+        .catch((error) => {
+          if (!cancelled) {
+            state.failureCount = Math.min(state.failureCount + 1, 4)
+            console.error('[hive] swallowed:workspaceWorkers.list', error)
+          }
+        })
         .finally(() => {
-          inFlight = false
-          scheduleNextLoad()
+          state.inFlight = false
+          state.lastSettledAt = cancelled ? null : Date.now()
         })
     }
-    loadWorkers()
+
+    const refreshDueWorkspaces = () => {
+      const now = Date.now()
+      for (const workspaceId of ids) {
+        const state = pollStateFor(workspaceId)
+        if (state.inFlight) continue
+        if (state.lastSettledAt === null) {
+          loadWorkspace(workspaceId)
+          continue
+        }
+        const delay = getRefreshDelay(state.failureCount, isActiveWorkspace(workspaceId))
+        if (now - state.lastSettledAt >= delay) loadWorkspace(workspaceId)
+      }
+    }
+
+    const scheduleNextLoad = (delay = ACTIVE_REFRESH_INTERVAL_MS) => {
+      if (cancelled) return
+      if (timeout !== undefined) window.clearTimeout(timeout)
+      timeout = window.setTimeout(() => {
+        timeout = undefined
+        refreshDueWorkspaces()
+        scheduleNextLoad()
+      }, delay)
+    }
+
+    wakePollerRef.current = () => {
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout)
+        timeout = undefined
+      }
+      refreshDueWorkspaces()
+      scheduleNextLoad()
+    }
+
+    refreshDueWorkspaces()
+    scheduleNextLoad()
     return () => {
       cancelled = true
       if (timeout !== undefined) window.clearTimeout(timeout)
+      if (wakePollerRef.current) wakePollerRef.current = null
     }
   }, [workspaceKey])
+
+  useEffect(() => {
+    const activeWorkspaceId = options.activeWorkspaceId
+    if (!activeWorkspaceId || !workspaceKey.split('\0').includes(activeWorkspaceId)) return
+    const state = pollStatesRef.current.get(activeWorkspaceId)
+    if (state && !state.inFlight) {
+      state.lastSettledAt = null
+      state.failureCount = 0
+    }
+    wakePollerRef.current?.()
+  }, [options.activeWorkspaceId, workspaceKey])
 
   return [workersByWorkspaceId, setWorkersByWorkspaceId] as const
 }

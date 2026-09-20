@@ -194,22 +194,69 @@ describe('buildOpenAttempts — linux', () => {
 describe('buildOpenAttempts — windows', () => {
   const path = 'C:\\Users\\admin\\Code\\hive'
 
-  test('vscode/cursor/zed use their PATH-installed CLI binary', () => {
+  test('vscode/cursor/zed are wrapped in cmd.exe so PATHEXT can resolve their .cmd shims', () => {
+    // Electron-based editors install on Windows as a `code.cmd` (cursor.cmd,
+    // zed.cmd, code-insiders.cmd) npm-style batch shim. `node:child_process`
+    // `execFile` does NOT use a shell, does NOT consult PATHEXT, and CANNOT
+    // launch a .cmd file directly — so `execFile('code', [path])` returns
+    // ENOENT even when the editor is installed. Wrapping in `cmd.exe /d /s /c`
+    // delegates PATHEXT resolution to cmd, which finds the .cmd shim and runs
+    // it. The path argv element keeps Node's standard quoting (path-with-
+    // spaces wraps to `"…"`); cmd's `/s /c` rule does NOT strip those quotes
+    // because the command line starts with `code`, not with `"`.
     expect(buildOpenAttempts('vscode', path, 'windows')[0]).toEqual({
-      command: 'code',
-      args: [path],
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call code C:\\Users\\admin\\Code\\hive'],
+      options: { windowsHide: true },
+    })
+    expect(buildOpenAttempts('vscode-insiders', path, 'windows')[0]).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call code-insiders C:\\Users\\admin\\Code\\hive'],
+      options: { windowsHide: true },
     })
     expect(buildOpenAttempts('cursor', path, 'windows')[0]).toEqual({
-      command: 'cursor',
-      args: [path],
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call cursor C:\\Users\\admin\\Code\\hive'],
+      options: { windowsHide: true },
     })
-    expect(buildOpenAttempts('zed', path, 'windows')[0]).toEqual({ command: 'zed', args: [path] })
+    expect(buildOpenAttempts('zed', path, 'windows')[0]).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call zed C:\\Users\\admin\\Code\\hive'],
+      options: { windowsHide: true },
+    })
   })
 
-  test('finder maps to explorer on windows', () => {
+  test('finder maps to explorer on windows (no cmd.exe wrap — explorer is a real .exe)', () => {
+    // `explorer.exe` is a real PE binary at `%SystemRoot%\explorer.exe`, so
+    // `execFile` resolves it directly via the standard `.exe` lookup. We
+    // intentionally do NOT route this through cmd.exe — the existing exit-
+    // code-1 special-case in `classifyFailure` depends on the spawn going
+    // straight to explorer.
     expect(buildOpenAttempts('finder', path, 'windows')[0]).toEqual({
       command: 'explorer',
       args: [path],
+    })
+  })
+
+  test('paths with spaces are quoted by node child_process; cmd /s /c does not strip them', () => {
+    // Documents the contract this fix relies on. The attempt shape passes
+    // the path as a discrete argv element; execFile wraps it in `"..."` only
+    // when needed. cmd.exe receives e.g. `code "C:\foo with spaces"` and
+    // parses normally (the `/s` quote-stripping only fires when the very
+    // first character after `/c` is `"`).
+    const spacedPath = 'C:\\foo with spaces\\hive'
+    expect(buildOpenAttempts('vscode', spacedPath, 'windows')[0]).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call code "C:\\foo with spaces\\hive"'],
+      options: { windowsHide: true },
+    })
+  })
+
+  test('cmd metacharacters and percent signs in paths are escaped as data', () => {
+    expect(buildOpenAttempts('cursor', 'C:\\Users\\%USERNAME%\\a&b', 'windows')[0]).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'call cursor "C:\\Users\\%%USERNAME%%\\a&b"'],
+      options: { windowsHide: true },
     })
   })
 })
@@ -234,6 +281,26 @@ describe('openWorkspace — happy path', () => {
       command: 'open',
       args: ['-a', 'Visual Studio Code', '/Users/admin/code/hive'],
     })
+  })
+
+  test('passes windowsHide when launching Windows editor shims through cmd.exe', async () => {
+    const calls: OpenAttempt[] = []
+    const runCommand: RunOpenCommand = async (command, args, options) => {
+      calls.push({ command, args, options })
+      return { ...fakeSpawnOk }
+    }
+    const result = await openWorkspace(
+      { path: 'C:\\Users\\admin\\Code\\hive', targetId: 'vscode' },
+      { platform: 'win32', runCommand }
+    )
+    expect(result.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', 'call code C:\\Users\\admin\\Code\\hive'],
+        options: { windowsHide: true },
+      },
+    ])
   })
 })
 
@@ -301,6 +368,66 @@ describe('openWorkspace — error classification', () => {
     if (!result.ok) {
       expect(result.errorCode).toBe('app-not-installed')
       expect(result.stderr).toContain('Unable to find application')
+    }
+  })
+
+  test('Windows "is not recognized as an internal or external command" stderr surfaces as app-not-installed', async () => {
+    // When we route VSCode/Cursor/Zed through `cmd.exe /d /s /c <bin>`, the
+    // spawn itself always succeeds (cmd.exe is always present) — only the
+    // INNER command lookup fails. cmd then prints `'code' is not recognized
+    // as an internal or external command` to stderr and exits non-zero.
+    // Without a Windows-aware app-not-installed pattern this would degrade
+    // to a generic 'unknown' error, which loses the actionable signal the
+    // previous bare-`code` (ENOENT) spawn provided.
+    const runCommand: RunOpenCommand = async () => ({
+      ...fakeSpawnOk,
+      status: 1,
+      stderr:
+        "'code' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n",
+    })
+    const result = await openWorkspace(
+      { path: 'C:\\code\\hive', targetId: 'vscode' },
+      { platform: 'win32', runCommand }
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorCode).toBe('app-not-installed')
+    }
+  })
+
+  test('Chinese Windows "不是内部或外部命令" stderr also surfaces as app-not-installed', async () => {
+    // Chinese (zh-CN) cmd.exe localizes the same error. Without a pattern
+    // entry for this, the group of users who hit the exact bug that started
+    // this whole Windows-audit session would see "unknown" instead of a
+    // meaningful classification.
+    const runCommand: RunOpenCommand = async () => ({
+      ...fakeSpawnOk,
+      status: 1,
+      stderr: "'cursor' 不是内部或外部命令，也不是可运行的程序\r\n或批处理文件。\r\n",
+    })
+    const result = await openWorkspace(
+      { path: 'C:\\code\\hive', targetId: 'cursor' },
+      { platform: 'win32', runCommand }
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorCode).toBe('app-not-installed')
+    }
+  })
+
+  test('Windows cmd exit 9009 surfaces as app-not-installed without localized stderr matching', async () => {
+    const runCommand: RunOpenCommand = async () => ({
+      ...fakeSpawnOk,
+      status: 9009,
+      stderr: 'commande introuvable',
+    })
+    const result = await openWorkspace(
+      { path: 'C:\\code\\hive', targetId: 'zed' },
+      { platform: 'win32', runCommand }
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorCode).toBe('app-not-installed')
     }
   })
 

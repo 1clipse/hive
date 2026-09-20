@@ -35,6 +35,7 @@ describe('worker status presentation', () => {
         hasRun
         onClick={vi.fn()}
         onAction={vi.fn()}
+        onRenameWorker={vi.fn(async () => ({ error: null }))}
         worker={worker({ id: 'idle-worker', status: 'idle' })}
       />
     )
@@ -42,6 +43,45 @@ describe('worker status presentation', () => {
     expect(screen.getByRole('status')).toHaveTextContent('idle')
     expect(screen.getByTestId('worker-card-idle-worker')).toHaveAttribute('data-status', 'idle')
     expect(screen.queryByLabelText('Start ember-check-23')).toBeNull()
+  })
+
+  test('working card hides queue depth and stale PTY tail noise', () => {
+    render(
+      <WorkerCard
+        hasRun
+        onClick={vi.fn()}
+        onRenameWorker={vi.fn(async () => ({ error: null }))}
+        worker={worker({
+          id: 'busy',
+          status: 'working',
+          pendingTaskCount: 3,
+          lastPtyLine: 'Editing src/routes/todos.ts',
+        })}
+      />
+    )
+
+    expect(screen.queryByTestId('worker-card-queue-busy')).toBeNull()
+    expect(screen.queryByText('3 queued')).toBeNull()
+    expect(screen.queryByTestId('worker-card-activity-busy')).toBeNull()
+    expect(screen.queryByText('Editing src/routes/todos.ts')).toBeNull()
+    expect(screen.getByRole('status')).toHaveAttribute(
+      'title',
+      expect.stringContaining('detect stalls automatically')
+    )
+  })
+
+  test('worker card hides stale last-activity lines', () => {
+    render(
+      <WorkerCard
+        hasRun
+        onClick={vi.fn()}
+        onRenameWorker={vi.fn(async () => ({ error: null }))}
+        worker={worker({ id: 'dead', status: 'stopped', lastPtyLine: 'half-finished spinner' })}
+      />
+    )
+
+    expect(screen.queryByTestId('worker-card-activity-dead')).toBeNull()
+    expect(screen.queryByText('half-finished spinner')).toBeNull()
   })
 
   test('workers pane groups idle running PTYs separately from active work', () => {
@@ -57,8 +97,10 @@ describe('worker status presentation', () => {
       <WorkersPane
         onAddWorkerClick={vi.fn()}
         onDeleteWorker={vi.fn()}
+        onOpenShellTerminal={vi.fn()}
         onOpenWorker={vi.fn()}
         onRenameWorker={vi.fn()}
+        onUpdateWorkerAvatar={vi.fn(async () => ({ error: null }))}
         onStartWorker={vi.fn()}
         startingWorkerId={null}
         terminalRuns={[terminalRun(idleWorker.id), terminalRun(activeWorker.id)]}

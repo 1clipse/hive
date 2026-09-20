@@ -1,13 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -31,12 +34,56 @@ const waitFor = async (
 }
 
 afterEach(() => {
+  for (const store of stores.splice(0)) {
+    store.close()
+  }
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
 describe('user input stdin injection', () => {
+  test('user-input endpoint rejects when the orchestrator PTY is inactive', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-user-input-inactive-'))
+    const workspacePath = join(dataDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(dataDir)
+
+    process.env.HIVE_DATA_DIR = dataDir
+    const hive = await runHiveCommand(['--port', '0'])
+
+    try {
+      const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
+      const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
+      })
+      const workspace = (await workspaceResponse.json()) as { id: string }
+
+      const inputResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/user-input`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ text: 'This should not be accepted while offline' }),
+      })
+
+      expect(inputResponse.status).toBe(409)
+
+      const store = createRuntimeStore({ dataDir })
+      stores.push(store)
+      expect(store.listMessagesForRecovery(workspace.id, 0)).not.toContainEqual(
+        expect.objectContaining({
+          text: 'This should not be accepted while offline',
+          type: 'user_input',
+        })
+      )
+    } finally {
+      delete process.env.HIVE_DATA_DIR
+      await hive.close()
+    }
+  })
+
   test('user-input endpoint injects text into orchestrator PTY stdin', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-user-input-stdin-'))
     const workspacePath = join(dataDir, 'workspace')
@@ -72,8 +119,8 @@ describe('user input stdin injection', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({
-          command: '/bin/bash',
-          args: ['-lc', `"${process.execPath}" "${orchScript}"`],
+          command: process.execPath,
+          args: [orchScript],
         }),
       })
 

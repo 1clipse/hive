@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import type { WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
+import { escapeCmdToken } from './windows-command-line.js'
 
 const WORKSPACE_SHELL_SUFFIX = ':shell'
 const WORKSPACE_SHELL_LABEL = 'Shell'
@@ -36,6 +37,33 @@ export const resolveWorkspaceShellLaunch = (
     return { command: getEnvValue(env, 'ComSpec', platform) ?? 'cmd.exe', args: [] }
   const command = env.SHELL || '/bin/sh'
   return { command, args: shouldUseLoginShell(command) ? ['-l'] : [] }
+}
+
+const isWindowsUncPath = (path: string, platform: NodeJS.Platform = process.platform): boolean =>
+  platform === 'win32' && /^[\\/]{2}[^\\/]+[\\/]+[^\\/]+/u.test(path)
+
+const getWindowsSafeShellCwd = (env: NodeJS.ProcessEnv = process.env): string => {
+  const systemRoot = getEnvValue(env, 'SystemRoot', 'win32')
+  if (systemRoot) return systemRoot
+  const systemDrive = getEnvValue(env, 'SystemDrive', 'win32')
+  if (systemDrive) return `${systemDrive}\\`
+  return process.cwd()
+}
+
+export const resolveWorkspaceShellStart = (
+  workspacePath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): { args: string[]; command: string; cwd: string } => {
+  const launch = resolveWorkspaceShellLaunch(env, platform)
+  if (isWindowsUncPath(workspacePath, platform)) {
+    return {
+      args: ['/d', '/s', '/k', `pushd ${escapeCmdToken(workspacePath)}`],
+      command: launch.command,
+      cwd: getWindowsSafeShellCwd(env),
+    }
+  }
+  return { ...launch, cwd: workspacePath }
 }
 
 export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefined) => {
@@ -185,12 +213,12 @@ export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefin
     },
     async start(workspace: WorkspaceSummary): Promise<LiveAgentRun> {
       const startedAt = Date.now()
-      const launch = resolveWorkspaceShellLaunch()
+      const launch = resolveWorkspaceShellStart(workspace.path)
       const run = await requireManager().startAgent({
         agentId: getWorkspaceShellAgentId(workspace.id),
         args: launch.args,
         command: launch.command,
-        cwd: workspace.path,
+        cwd: launch.cwd,
         env: {
           COLORTERM: 'truecolor',
           FORCE_COLOR: '1',

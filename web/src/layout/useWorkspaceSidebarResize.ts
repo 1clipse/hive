@@ -3,8 +3,16 @@ import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useState }
 const STORAGE_KEY = 'hive.workspace-sidebar.width'
 export const WORKSPACE_SIDEBAR_MIN = 56
 export const WORKSPACE_SIDEBAR_MAX = 280
-const WORKSPACE_SIDEBAR_DEFAULT = 256
+const WORKSPACE_SIDEBAR_DEFAULT = WORKSPACE_SIDEBAR_MIN
 const KEYBOARD_STEP = 16
+
+// The expand/collapse toggle snaps between two presets. Collapsed is the
+// icon-only minimum; expanded is wide enough that workspace names and the
+// per-row delete button are visible (both hide under the 96px container
+// query in globals.css). Dragging the handle is unchanged and still spans
+// the full MIN..MAX range — the toggle just offers a discoverable shortcut.
+export const WORKSPACE_SIDEBAR_EXPANDED = 240
+const WORKSPACE_SIDEBAR_COLLAPSE_MAX = 96
 
 const clamp = (value: number): number =>
   Math.min(WORKSPACE_SIDEBAR_MAX, Math.max(WORKSPACE_SIDEBAR_MIN, value))
@@ -61,6 +69,14 @@ export const useWorkspaceSidebarResize = () => {
     [width]
   )
 
+  const collapsed = width <= WORKSPACE_SIDEBAR_COLLAPSE_MAX
+
+  const toggleCollapsed = useCallback(() => {
+    setWidth((current) =>
+      current <= WORKSPACE_SIDEBAR_COLLAPSE_MAX ? WORKSPACE_SIDEBAR_EXPANDED : WORKSPACE_SIDEBAR_MIN
+    )
+  }, [])
+
   const onResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
@@ -77,5 +93,7 @@ export const useWorkspaceSidebarResize = () => {
     }
   }, [])
 
-  return { beginResize, onResizeKeyDown, resizing, width }
+  return { beginResize, collapsed, onResizeKeyDown, resizing, toggleCollapsed, width }
 }
+
+export type WorkspaceSidebarResize = ReturnType<typeof useWorkspaceSidebarResize>

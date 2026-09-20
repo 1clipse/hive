@@ -8,6 +8,7 @@ import { type PickFolderResponse, pickFolder } from './fs-pick-folder.js'
 import { HttpError } from './http-errors.js'
 import { assertLocalRequest } from './local-request-guard.js'
 import { openWorkspace } from './open-target-commands.js'
+import { readPackageVersion } from './package-version.js'
 import type { OpenWorkspaceService } from './route-types.js'
 import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
@@ -19,6 +20,7 @@ interface CreateAppOptions {
   store: RuntimeStore
   pickFolderService?: () => Promise<PickFolderResponse>
   openWorkspaceService?: OpenWorkspaceService
+  packageVersionReader?: () => string
   tasksFileService?: TasksFileService
   versionService?: VersionService
 }
@@ -108,14 +110,94 @@ const sendJson = (response: ServerResponse, statusCode: number, body: unknown) =
   response.end(JSON.stringify(body))
 }
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+const createVersionMismatchBody = (
+  runtimeVersion: string,
+  installedVersion: string
+) => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Restart Hive</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { align-items: center; background: #0d0f12; color: #f4f4f5; display: flex; justify-content: center; margin: 0; min-height: 100vh; }
+      main { border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: #17191d; box-shadow: 0 18px 64px rgba(0,0,0,.4); max-width: 520px; padding: 28px; }
+      h1 { font-size: 22px; line-height: 1.2; margin: 0 0 10px; }
+      p { color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
+      code { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); border-radius: 6px; color: #e5e7eb; padding: 2px 6px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Restart Hive</h1>
+      <p>Hive was updated on disk while this runtime process was still running.</p>
+      <p>Running runtime: <code>${escapeHtml(runtimeVersion)}</code><br />Installed package: <code>${escapeHtml(installedVersion)}</code></p>
+      <p>Stop the current <code>hive</code> process and start it again to load the new UI and API together.</p>
+    </main>
+  </body>
+</html>`
+
+const readVersionMismatch = (
+  runtimeVersion: string,
+  packageVersionReader: () => string
+): { installedVersion: string; runtimeVersion: string } | null => {
+  const installedVersion = packageVersionReader()
+  if (
+    runtimeVersion === 'unknown' ||
+    installedVersion === 'unknown' ||
+    installedVersion === runtimeVersion
+  ) {
+    return null
+  }
+  return { installedVersion, runtimeVersion }
+}
+
+const sendVersionMismatchJson = (
+  response: ServerResponse,
+  mismatch: { installedVersion: string; runtimeVersion: string }
+) => {
+  sendJson(response, 409, {
+    code: 'runtime_version_mismatch',
+    current_version: mismatch.runtimeVersion,
+    error: 'Hive was updated on disk. Restart the running hive process to use the new version.',
+    installed_version: mismatch.installedVersion,
+  })
+}
+
+const sendVersionMismatchPage = (
+  response: ServerResponse,
+  request: IncomingMessage,
+  mismatch: { installedVersion: string; runtimeVersion: string }
+) => {
+  response.statusCode = 409
+  response.setHeader('content-type', 'text/html; charset=utf-8')
+  response.setHeader('cache-control', 'no-store')
+  response.end(
+    request.method === 'HEAD'
+      ? undefined
+      : createVersionMismatchBody(mismatch.runtimeVersion, mismatch.installedVersion)
+  )
+}
+
 export const createApp = ({
   store,
   pickFolderService = pickFolder,
   openWorkspaceService = (input) => openWorkspace(input),
+  packageVersionReader = readPackageVersion,
   tasksFileService = createTasksFileService(),
   versionService = createVersionService(),
 }: CreateAppOptions) => {
   const staticDir = process.env.HIVE_STATIC_DIR ?? getDefaultStaticDir()
+  const runtimeVersion = packageVersionReader()
   const staticAvailablePromise = canServeStatic(staticDir)
   const server = createServer(async (request, response) => {
     const method = request.method ?? 'GET'
@@ -140,11 +222,21 @@ export const createApp = ({
       }
 
       if (isReservedPath(url.pathname)) {
+        const mismatch = readVersionMismatch(runtimeVersion, packageVersionReader)
+        if (mismatch) {
+          sendVersionMismatchJson(response, mismatch)
+          return
+        }
         sendJson(response, 404, { error: 'Not found' })
         return
       }
 
       if (await staticAvailablePromise) {
+        const mismatch = readVersionMismatch(runtimeVersion, packageVersionReader)
+        if (mismatch) {
+          sendVersionMismatchPage(response, request, mismatch)
+          return
+        }
         const served = await sendStatic(response, staticDir, url.pathname, request)
         if (served) return
       }
@@ -159,9 +251,19 @@ export const createApp = ({
       sendJson(response, 500, { error: message })
     }
   })
-  createTerminalWebSocketServer(server, store, tasksFileService)
+  const wsServer = createTerminalWebSocketServer(server, store, tasksFileService)
 
-  return { server, store }
+  return {
+    server,
+    store,
+    // Tear-down for the WebSocket layer. Callers must invoke this
+    // BEFORE awaiting `server.close()` if they want a prompt return:
+    // `server.close()` waits on every existing socket, and Node's
+    // `closeAllConnections()` does NOT terminate already-upgraded
+    // WebSocket clients. Without this hook a Ctrl+C in the Hive
+    // runtime hangs as long as any browser tab is connected.
+    closeWebSockets: wsServer.close,
+  }
 }
 
 export type { CreateAppOptions }

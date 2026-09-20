@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,7 @@ import { probeDirectory } from '../../src/server/fs-browse.js'
 import type { PickFolderResponse } from '../../src/server/fs-pick-folder.js'
 import type { OpenWorkspaceService } from '../../src/server/route-types.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from './fs-cleanup.js'
 
 interface TestServerContext {
   baseUrl: string
@@ -56,9 +57,10 @@ export const startTestServer = async (
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
     async close() {
+      app.closeWebSockets()
       await store.close()
       await new Promise<void>((resolve) => app.server.close(() => resolve()))
-      if (ownsDataDir) rmSync(dataDir, { force: true, recursive: true })
+      if (ownsDataDir) removeTestPath(dataDir)
     },
     dataDir,
     store,

@@ -1,16 +1,21 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { createRuntimeStore, type RuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
+const stores: RuntimeStore[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  while (stores.length > 0) {
+    await stores.pop()?.close()
+  }
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 
@@ -20,10 +25,12 @@ describe('workspace persistence', () => {
     tempDirs.push(tempDir)
 
     const firstStore = createRuntimeStore({ dataDir: tempDir })
+    stores.push(firstStore)
     firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
     firstStore.createWorkspace('/tmp/hive-beta', 'Beta')
 
     const secondStore = createRuntimeStore({ dataDir: tempDir })
+    stores.push(secondStore)
 
     expect(secondStore.listWorkspaces()).toEqual([
       {

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import type { TerminalRunSummary } from '../api.js'
 import { useI18n } from '../i18n.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import {
   type ServiceWorkerUpdateApply,
   subscribeServiceWorkerUpdate,
@@ -22,6 +23,7 @@ interface UpdateAvailableToastProps {
  */
 export const UpdateAvailableToast = ({ terminalRuns }: UpdateAvailableToastProps) => {
   const { t } = useI18n()
+  const isMobile = useIsMobile()
   const [apply, setApply] = useState<ServiceWorkerUpdateApply | null>(null)
   const [applying, setApplying] = useState(false)
 
@@ -48,8 +50,9 @@ export const UpdateAvailableToast = ({ terminalRuns }: UpdateAvailableToastProps
 
   return (
     <div
-      className="elev-2 fixed right-4 bottom-8 z-50 flex items-center gap-3 rounded border px-3 py-2"
+      className="update-toast elev-2 fixed right-4 bottom-8 z-50 flex items-center gap-3 rounded border px-3 py-2"
       style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-bright)' }}
+      data-mobile={isMobile || undefined}
       data-testid="update-available-toast"
       role="status"
       aria-live="polite"

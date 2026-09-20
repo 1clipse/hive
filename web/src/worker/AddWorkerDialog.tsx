@@ -1,11 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Dices, Store } from 'lucide-react'
-import { type FormEvent, useMemo, useState } from 'react'
+import { Dices, Store, X } from 'lucide-react'
+import { type FormEvent, lazy, Suspense, useMemo, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset, RoleTemplate } from '../api.js'
 import { useI18n } from '../i18n.js'
-import { MarketplaceDrawer } from '../marketplace/MarketplaceDrawer.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
 import {
@@ -16,13 +16,22 @@ import {
   SectionLabel,
   StartupCommandField,
 } from './AddWorkerDialogFields.js'
+import { WorkerAvatarPicker } from './WorkerAvatarPicker.js'
+
+const MarketplaceDrawer = lazy(() =>
+  import('../marketplace/MarketplaceDrawer.js').then((module) => ({
+    default: module.MarketplaceDrawer,
+  }))
+)
 
 type AddWorkerDialogProps = {
+  avatar: string | null
   commandPresets: CommandPreset[]
   commandPresetId: string
   creating?: boolean
   customTemplates: RoleTemplate[]
   onApplyMarketplaceImport: (input: { name: string; description: string }) => void
+  onAvatarChange: (value: string | null) => void
   onClose: () => void
   onDeleteTemplate: (templateId: string) => Promise<void> | void
   onNameChange: (value: string) => void
@@ -46,11 +55,13 @@ type AddWorkerDialogProps = {
 }
 
 export const AddWorkerDialog = ({
+  avatar,
   commandPresets,
   commandPresetId,
   creating = false,
   customTemplates,
   onApplyMarketplaceImport,
+  onAvatarChange,
   onClose,
   onDeleteTemplate,
   onNameChange,
@@ -74,7 +85,9 @@ export const AddWorkerDialog = ({
 }: AddWorkerDialogProps) => {
   const { t } = useI18n()
   const toast = useToast()
+  const isMobile = useIsMobile()
   const [marketplaceOpen, setMarketplaceOpen] = useState(false)
+  const [marketplaceMounted, setMarketplaceMounted] = useState(false)
   const importedNames = useMemo(
     () => new Set(customTemplates.map((template) => template.name)),
     [customTemplates]
@@ -121,82 +134,108 @@ export const AddWorkerDialog = ({
           data-testid="add-worker-overlay"
           className="app-overlay fixed inset-0 z-40"
         />
-        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4 max-md:items-end max-md:p-0">
           <Dialog.Content
             data-testid="add-worker-content"
-            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[560px] max-w-full flex-col rounded-lg border"
+            data-mobile={isMobile || undefined}
+            className={`${isMobile ? 'dialog-slide-up add-worker-sheet' : 'dialog-scale-pop'} elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[560px] max-w-full flex-col overflow-hidden rounded-lg border pointer-coarse:max-h-[85dvh] max-md:w-full max-md:rounded-b-none max-md:rounded-t-xl`}
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
+              // Fixed sheet height: keyboard show/hide resizes the viewport, a
+              // fixed 85dvh keeps the form from jumping as sections expand.
+              ...(isMobile ? { height: '85dvh' } : {}),
             }}
           >
             <form
               onSubmit={handleSubmit}
               aria-label={t('addWorker.title')}
-              className="flex flex-col"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden max-h-full"
             >
               <div
-                className="flex shrink-0 flex-col gap-0.5 border-b px-5 py-4"
+                className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-4 max-md:px-4"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <Dialog.Title className="text-lg font-semibold text-pri">
-                  {t('addWorker.title')}
-                </Dialog.Title>
-                <Dialog.Description className="text-sm text-ter">
-                  {t('addWorker.description', { command: 'team send' })}
-                </Dialog.Description>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <Dialog.Title className="text-lg font-semibold text-pri">
+                    {t('addWorker.title')}
+                  </Dialog.Title>
+                  <Dialog.Description className="text-sm text-ter">
+                    {t('addWorker.description', { command: 'team send' })}
+                  </Dialog.Description>
+                </div>
+                {/* Phones have no Esc key — give the sheet an explicit close. */}
+                {isMobile ? (
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      aria-label={t('common.closeDialog')}
+                      data-testid="add-worker-close"
+                      className="-mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sec"
+                      style={{ background: 'var(--bg-2)' }}
+                    >
+                      <X size={18} aria-hidden />
+                    </button>
+                  </Dialog.Close>
+                ) : null}
               </div>
 
-              <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
-                <label className="flex flex-col gap-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <SectionLabel>{t('addWorker.name')}</SectionLabel>
-                    <Tooltip label={t('addWorker.randomTooltip')}>
-                      <button
-                        type="button"
-                        aria-label={t('addWorker.randomAria')}
-                        className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
-                        onClick={onRandomName}
-                        data-testid="random-worker-name"
-                      >
-                        <Dices size={12} aria-hidden />
-                        {t('addWorker.random')}
-                      </button>
-                    </Tooltip>
+              <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-5 py-4 max-md:gap-5 max-md:px-4">
+                <div className="flex flex-col gap-2">
+                  <SectionLabel>{t('addWorker.name')}</SectionLabel>
+                  <div className="relative flex items-center">
+                    <input
+                      // biome-ignore lint/a11y/noAutofocus: dialog is opt-in; without this Radix parks focus on the first toolbar button (Random) rather than the name field. On phones we skip it — autofocus pops the keyboard over a sheet the user hasn't read yet.
+                      autoFocus={!isMobile}
+                      value={workerName}
+                      onChange={(event) => onNameChange(event.target.value)}
+                      placeholder={t('addWorker.namePlaceholder')}
+                      className="input w-full pr-24"
+                      style={{ borderRadius: '10px' }}
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                      <Tooltip label={t('addWorker.randomTooltip')}>
+                        <button
+                          type="button"
+                          aria-label={t('addWorker.randomAria')}
+                          className="flex h-7 items-center gap-1.5 rounded-lg border border-bright/10 bg-3 px-2.5 text-xs font-semibold text-sec hover:text-pri hover:bg-4 active:scale-95 transition-all outline-none"
+                          onClick={onRandomName}
+                          data-testid="random-worker-name"
+                        >
+                          <Dices size={13} aria-hidden />
+                          <span>{t('addWorker.random')}</span>
+                        </button>
+                      </Tooltip>
+                    </div>
                   </div>
-                  <input
-                    // biome-ignore lint/a11y/noAutofocus: dialog is opt-in; without this Radix parks focus on the first toolbar button (Random) rather than the name field
-                    autoFocus
-                    value={workerName}
-                    onChange={(event) => onNameChange(event.target.value)}
-                    placeholder={t('addWorker.namePlaceholder')}
-                    className="input"
-                  />
-                </label>
+                </div>
 
                 <RolePicker workerRole={workerRole} onRoleChange={onRoleChange} />
                 <button
                   type="button"
-                  onClick={() => setMarketplaceOpen(true)}
+                  onClick={() => {
+                    setMarketplaceMounted(true)
+                    setMarketplaceOpen(true)
+                  }}
                   data-testid="open-marketplace"
-                  className="marketplace-browse-btn flex cursor-pointer items-center gap-2 self-start rounded-md border px-3 py-1.5 text-xs text-sec outline-none transition-colors focus-visible:ring-2"
+                  className="marketplace-browse-btn flex cursor-pointer items-center gap-2 self-start rounded-lg border px-3 py-2 text-xs font-semibold text-sec outline-none transition-all duration-200 hover:text-pri hover:-translate-y-0.5 active:scale-98 shadow-sm hover:shadow-md"
                   style={{
-                    background: 'var(--bg-0)',
+                    background: 'linear-gradient(to bottom, var(--bg-1), var(--bg-0))',
                     borderColor: 'var(--border-bright)',
                     ['--tw-ring-color' as string]:
                       'color-mix(in oklab, var(--accent) 45%, transparent)',
                   }}
                 >
-                  <Store size={14} aria-hidden />
-                  {t('marketplace.openFromAddWorker')}
+                  <Store size={14} aria-hidden className="text-accent" />
+                  <span>{t('marketplace.openFromAddWorker')}</span>
                 </button>
                 {workerRole === 'custom' ? (
                   <RoleTemplatePicker
                     customTemplates={customTemplates}
-                    disabledReason={writeDisabledReason}
                     onDeleteTemplate={onDeleteTemplate}
                     onSelect={onTemplateChange}
                     selectedTemplateId={selectedTemplateId}
+                    {...(writeDisabledReason ? { disabledReason: writeDisabledReason } : {})}
                   />
                 ) : null}
                 <RoleInstructionsField
@@ -212,7 +251,15 @@ export const AddWorkerDialog = ({
                   roleDescription={roleDescription}
                   templateBusy={templateBusy}
                   workerRole={workerRole}
-                  writeDisabledReason={writeDisabledReason}
+                  {...(writeDisabledReason ? { writeDisabledReason } : {})}
+                />
+                <WorkerAvatarPicker
+                  avatar={avatar}
+                  commandPresetId={commandPresetId || undefined}
+                  disabled={Boolean(writeDisabledReason)}
+                  onChange={onAvatarChange}
+                  workerRole={workerRole}
+                  showStatus
                 />
                 <AgentCliPicker
                   commandPresetId={commandPresetId}
@@ -223,13 +270,13 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-3"
+                className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-3 max-md:px-4 max-md:pb-[max(12px,env(safe-area-inset-bottom))]"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
                 <button
                   type="button"
                   onClick={onClose}
-                  className="icon-btn"
+                  className={`icon-btn border border-bright/20 rounded-lg hover:bg-3 hover:text-pri transition-all active:scale-95 ${isMobile ? 'flex-1' : ''}`}
                   data-testid="add-worker-cancel"
                 >
                   {t('addWorker.cancel')}
@@ -238,7 +285,7 @@ export const AddWorkerDialog = ({
                   type="submit"
                   disabled={creating || Boolean(writeDisabledReason)}
                   title={writeDisabledReason ?? undefined}
-                  className="icon-btn icon-btn--primary"
+                  className={`icon-btn icon-btn--primary rounded-lg font-bold shadow-md hover:shadow-lg transition-all active:scale-[0.97] hover:-translate-y-0.5 ${isMobile ? 'flex-[2]' : ''}`}
                   data-testid="add-worker-submit"
                 >
                   {creating ? t('addWorker.creating') : t('addWorker.create')}
@@ -248,12 +295,16 @@ export const AddWorkerDialog = ({
           </Dialog.Content>
         </div>
       </Dialog.Portal>
-      <MarketplaceDrawer
-        open={marketplaceOpen}
-        onClose={() => setMarketplaceOpen(false)}
-        onImport={handleMarketplaceImport}
-        importedNames={importedNames}
-      />
+      {marketplaceMounted ? (
+        <Suspense fallback={null}>
+          <MarketplaceDrawer
+            open={marketplaceOpen}
+            onClose={() => setMarketplaceOpen(false)}
+            onImport={handleMarketplaceImport}
+            importedNames={importedNames}
+          />
+        </Suspense>
+      ) : null}
     </Dialog.Root>
   )
 }

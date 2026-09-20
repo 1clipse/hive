@@ -1,6 +1,6 @@
 import '../helpers/mock-node-pty.ts'
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
 const stores: Array<{ close: () => Promise<void> }> = []
@@ -35,7 +36,7 @@ afterEach(async () => {
   }
 
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    removeTestPath(dir)
   }
 })
 

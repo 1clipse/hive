@@ -164,7 +164,7 @@ describe('TerminalBottomPanel', () => {
     expect(handle.getAttribute('aria-orientation')).toBe('horizontal')
   })
 
-  test('pointerdown on resize handle does not throw', () => {
+  test('pointerdown on resize handle starts panel resizing', () => {
     render(
       <TerminalBottomPanel
         tabs={[workerTab]}
@@ -179,7 +179,8 @@ describe('TerminalBottomPanel', () => {
       />
     )
     const handle = screen.getByTestId('terminal-panel-resize-handle')
-    expect(() => fireEvent.pointerDown(handle, { clientY: 400 })).not.toThrow()
+    fireEvent.pointerDown(handle, { clientY: 400 })
+    expect(document.body.style.cursor).toBe('ns-resize')
   })
 
   test('Cmd+W on the panel container closes the active tab', () => {

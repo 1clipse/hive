@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { WORKER_NAME_POOL } from '../../src/shared/random-worker-name.js'
 import { App } from '../../web/src/app.js'
+import { APP_VERSION } from '../../web/src/version.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 vi.mock('@xterm/xterm', () => ({
@@ -15,6 +20,7 @@ vi.mock('@xterm/xterm', () => ({
     onData() {
       return { dispose() {} }
     }
+    focus() {}
     open() {}
     write(_chunk?: string, callback?: () => void) {
       callback?.()
@@ -98,6 +104,7 @@ const stubFetchWithEmptyTerminalRuns = () => {
 
 beforeEach(async () => {
   window.localStorage.clear()
+  window.localStorage.setItem('hive.last-seen-version', APP_VERSION)
   window.matchMedia =
     window.matchMedia ??
     ((query: string) =>
@@ -120,11 +127,14 @@ beforeEach(async () => {
     cookie = response.headers.get('set-cookie') ?? ''
   })
   uiCookie = cookie
+  const workspacePath = join(server.dataDir, 'workspace-alpha')
+  mkdirSync(workspacePath)
   const workspaceResponse = await nativeFetch(`${server.baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: '/tmp/hive-alpha' }),
+    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
   })
+  expect(workspaceResponse.status).toBe(201)
   workspaceId = ((await workspaceResponse.json()) as { id: string }).id
   const presetResponse = await nativeFetch(`${server.baseUrl}/api/settings/command-presets`, {
     method: 'POST',
@@ -139,6 +149,7 @@ beforeEach(async () => {
       yolo_args_template: null,
     }),
   })
+  expect(presetResponse.status).toBe(201)
   sleeperPresetId = ((await presetResponse.json()) as { id: string }).id
   stubFetch()
 })
@@ -165,7 +176,7 @@ describe('worker flow with real server', () => {
     const dialog = await openAddWorkerDialog()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generate random member name' }))
     const nameInput = within(dialog).getByPlaceholderText('e.g. Alice') as HTMLInputElement
-    expect(nameInput.value).toMatch(/^[a-z]+(?:-[a-z]+)*$/)
+    expect(WORKER_NAME_POOL).toContain(nameInput.value)
     fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
       target: { value: 'Alice' },
     })
@@ -278,11 +289,12 @@ describe('worker flow with real server', () => {
     expect(worker?.description).toBe('你是审查型 worker。先找高风险问题，再给出最小修复建议。')
   })
 
-  test('Add Worker random name follows the selected Chinese language', async () => {
+  test('Add Worker random name still comes from the shared bank under Chinese UI', async () => {
     render(<App />)
 
     await screen.findByTestId('add-worker-trigger', {}, { timeout: WORKER_FLOW_TIMEOUT_MS })
-    fireEvent.click(screen.getByRole('button', { name: 'Switch language to 中文' }))
+    fireEvent.click(screen.getByTestId('topbar-app-settings'))
+    fireEvent.click(screen.getByRole('button', { name: '中文' }))
     await waitFor(() => {
       expect(screen.getByTestId('add-worker-trigger')).toHaveTextContent('添加成员')
     })
@@ -291,7 +303,7 @@ describe('worker flow with real server', () => {
     const nameInput = within(dialog).getByPlaceholderText('例如 鲁班') as HTMLInputElement
     fireEvent.click(within(dialog).getByRole('button', { name: '生成随机成员名' }))
 
-    expect(nameInput.value).toMatch(/^[\u4e00-\u9fff]+$/)
+    expect(WORKER_NAME_POOL).toContain(nameInput.value)
   })
 
   test('Add Worker dialog can run a generic full startup command without preset semantics', async () => {

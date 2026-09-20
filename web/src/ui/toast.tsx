@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, X, XCircle } from 'lucide-react'
 import type { ComponentType, CSSProperties } from 'react'
 
 import { useI18n } from '../i18n.js'
+import { useIsMobile } from '../mobile/layout-mode.js'
 import type { ToastEntry, ToastKind } from './useToast.js'
 import { useToast, useToastList } from './useToast.js'
 
@@ -73,6 +74,10 @@ const ToastCard = ({ toast, api }: ToastCardProps) => {
 export const Toaster = () => {
   const toasts = useToastList()
   const api = useToast()
+  // On mobile the bottom nav owns the bottom strip, so the toast viewport is
+  // lifted above it (CSS .toaster[data-mobile]) — otherwise toasts sit behind
+  // the nav and are never seen. Desktop keeps bottom-8.
+  const isMobile = useIsMobile()
   if (toasts.length === 0) return null
   // Split severity: errors get role=alert + assistive-tech-interrupting
   // aria-live=assertive so they're announced immediately. Success/warning
@@ -81,7 +86,8 @@ export const Toaster = () => {
   const otherToasts = toasts.filter((t) => t.kind !== 'error')
   return (
     <div
-      className="pointer-events-none fixed right-4 bottom-8 z-50 flex flex-col gap-2"
+      className="toaster pointer-events-none fixed right-4 bottom-8 z-50 flex flex-col gap-2"
+      data-mobile={isMobile || undefined}
       data-testid="toaster"
     >
       <div role="status" aria-live="polite" className="flex flex-col gap-2">

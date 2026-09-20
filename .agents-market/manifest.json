@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "installs": [
+    {
+      "packId": "frontend-pack",
+      "packVersion": "0.1.0",
+      "target": "codex",
+      "installedAt": "2026-06-09T11:05:21.836Z",
+      "registry": {
+        "source": "bundled"
+      },
+      "files": [
+        {
+          "path": ".codex/agents/code-reviewer.toml",
+          "target": "codex",
+          "agentId": "code-reviewer",
+          "sha256": "83d06157eaafa3407f4975c1f5759f994d0f5c9716b714b1fba2c62ab0635099"
+        },
+        {
+          "path": ".codex/agents/frontend-verifier.toml",
+          "target": "codex",
+          "agentId": "frontend-verifier",
+          "sha256": "0722c730d6c44458a82e62b14723a1a8d5df119baeb3e8dcbfc8a95d76cf7219"
+        },
+        {
+          "path": ".codex/agents/accessibility-auditor.toml",
+          "target": "codex",
+          "agentId": "accessibility-auditor",
+          "sha256": "d9531c8f2b880000d80c83a3e90963e2628ccf14cea15cabdd1ce3ae33d3e1e4"
+        },
+        {
+          "path": ".codex/agents/test-runner.toml",
+          "target": "codex",
+          "agentId": "test-runner",
+          "sha256": "6ba62c2a0e8623f23d7f3f1d6b74cad47da797caa153752aeacfb39df96df6eb"
+        },
+        {
+          "path": ".codex/agents/debugger.toml",
+          "target": "codex",
+          "agentId": "debugger",
+          "sha256": "f266cc819013e8a67a4c16cb26da365184678037e1519bbfe1920d5c35ee871f"
+        }
+      ]
+    }
+  ]
+}

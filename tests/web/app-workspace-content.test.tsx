@@ -15,22 +15,6 @@ const shellRun = vi.hoisted<TerminalRunSummary>(() => ({
   status: 'running',
 }))
 
-vi.mock('../../web/src/WorkspaceTerminalPanels.js', () => ({
-  WorkspaceTerminalPanels: ({
-    optimisticRuns,
-    terminalRuns,
-    workspaceId,
-  }: {
-    optimisticRuns?: TerminalRunSummary[]
-    terminalRuns: TerminalRunSummary[]
-    workspaceId: string
-  }) => (
-    <div data-testid="terminal-panels" data-workspace-id={workspaceId}>
-      {[...terminalRuns, ...(optimisticRuns ?? [])].map((run) => run.run_id).join(',')}
-    </div>
-  ),
-}))
-
 vi.mock('../../web/src/WorkspaceDetail.js', () => ({
   WorkspaceDetail: ({
     onShellRunStarted,
@@ -60,19 +44,15 @@ const workspace: WorkspaceSummary = {
 const workerActions: WorkerActions = {
   createWorker: vi.fn(),
   deleteWorker: vi.fn(),
+  restartWorkerRun: vi.fn(),
   startWorker: vi.fn(),
   stopWorkerRun: vi.fn(),
+  updateWorkerAvatar: vi.fn(),
 }
 
 describe('AppWorkspaceContent', () => {
-  test('passes shell runs through the active workspace content boundary', () => {
+  test('passes shell runs through the active workspace content boundary', async () => {
     const onShellRunStarted = vi.fn()
-    const inactiveRun: TerminalRunSummary = {
-      agent_id: 'ws-2:shell',
-      agent_name: 'Shell',
-      run_id: 'inactive-shell-run',
-      status: 'running',
-    }
     const polledRun: TerminalRunSummary = {
       agent_id: `${workspace.id}:orchestrator`,
       agent_name: 'Orchestrator',
@@ -88,13 +68,12 @@ describe('AppWorkspaceContent', () => {
         demoMode={false}
         onDeleteWorkspace={vi.fn()}
         onExitDemo={vi.fn()}
+        onOrchestratorRunClosed={vi.fn()}
         onRequestAddWorkspace={vi.fn()}
         onShellRunClosed={vi.fn()}
         onShellRunStarted={onShellRunStarted}
         onTryDemo={vi.fn()}
-        optimisticRunsByWorkspaceId={{ [workspace.id]: [shellRun], 'ws-2': [inactiveRun] }}
         orchestratorAutostartErrors={{}}
-        orchestratorAutostartRunIds={{}}
         recordOrchestratorResult={vi.fn()}
         terminalRuns={[polledRun]}
         workerActions={workerActions}
@@ -102,13 +81,34 @@ describe('AppWorkspaceContent', () => {
       />
     )
 
-    expect(screen.getByTestId('terminal-panels')).toHaveAttribute('data-workspace-id', workspace.id)
-    expect(screen.getByTestId('terminal-panels')).toHaveTextContent(polledRun.run_id)
-    expect(screen.getByTestId('terminal-panels')).toHaveTextContent(shellRun.run_id)
-    expect(screen.getByTestId('terminal-panels')).not.toHaveTextContent(inactiveRun.run_id)
-
     fireEvent.click(screen.getByTestId('emit-shell-run'))
 
     expect(onShellRunStarted).toHaveBeenCalledWith(workspace.id, shellRun)
+    expect(screen.queryByTestId('terminal-panels')).toBeNull()
+  })
+
+  test('does not own terminal panel mounting', () => {
+    render(
+      <AppWorkspaceContent
+        activeId={workspace.id}
+        activeWorkspace={workspace}
+        bootstrapError={null}
+        demoMode={false}
+        onDeleteWorkspace={vi.fn()}
+        onExitDemo={vi.fn()}
+        onOrchestratorRunClosed={vi.fn()}
+        onRequestAddWorkspace={vi.fn()}
+        onShellRunClosed={vi.fn()}
+        onShellRunStarted={vi.fn()}
+        onTryDemo={vi.fn()}
+        orchestratorAutostartErrors={{}}
+        recordOrchestratorResult={vi.fn()}
+        terminalRuns={[]}
+        workerActions={workerActions}
+        workers={[]}
+      />
+    )
+
+    expect(screen.queryByTestId('terminal-panels')).toBeNull()
   })
 })

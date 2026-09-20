@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import type { TeamListItem } from '../../../src/shared/types.js'
 import { isWorkspaceShellRun, type TerminalInputProfile, type TerminalRunSummary } from '../api.js'
-
-const OPTIMISTIC_RUN_TTL_MS = 3000
-
-type TimerId = number
 
 interface OptimisticRunInput {
   agentId: string
@@ -34,20 +31,12 @@ export const mergeTerminalRuns = (
 
 export const useOptimisticTerminalRuns = (
   workspaceId: string | null,
-  actualRuns: TerminalRunSummary[]
+  actualRuns: TerminalRunSummary[],
+  workers: TeamListItem[] = []
 ) => {
   const [optimisticRunsByWorkspaceId, setOptimisticRunsByWorkspaceId] = useState<
     Record<string, TerminalRunSummary[]>
   >({})
-  const timersRef = useRef(new Map<string, TimerId>())
-
-  useEffect(
-    () => () => {
-      for (const timer of timersRef.current.values()) window.clearTimeout(timer)
-      timersRef.current.clear()
-    },
-    []
-  )
 
   const forgetOptimisticAgent = useCallback((targetWorkspaceId: string, agentId: string) => {
     setOptimisticRunsByWorkspaceId((current) => ({
@@ -59,9 +48,6 @@ export const useOptimisticTerminalRuns = (
   }, [])
 
   const forgetOptimisticRun = useCallback((targetWorkspaceId: string, runId: string) => {
-    const existingTimer = timersRef.current.get(runId)
-    if (existingTimer) window.clearTimeout(existingTimer)
-    timersRef.current.delete(runId)
     setOptimisticRunsByWorkspaceId((current) => ({
       ...current,
       [targetWorkspaceId]: (current[targetWorkspaceId] ?? []).filter((run) => run.run_id !== runId),
@@ -69,21 +55,24 @@ export const useOptimisticTerminalRuns = (
   }, [])
 
   useEffect(() => {
-    if (!workspaceId || actualRuns.length === 0) return
+    if (!workspaceId) return
     const actualRunIds = new Set(actualRuns.map((run) => run.run_id))
+    const actualAgentIds = new Set(actualRuns.map((run) => run.agent_id))
+    const stoppedWorkerIds = new Set(
+      workers.filter((worker) => worker.status === 'stopped').map((worker) => worker.id)
+    )
     setOptimisticRunsByWorkspaceId((current) => {
       const currentRuns = current[workspaceId] ?? []
       const retained = currentRuns.filter((run) => {
-        if (!actualRunIds.has(run.run_id)) return true
-        const timer = timersRef.current.get(run.run_id)
-        if (timer) window.clearTimeout(timer)
-        timersRef.current.delete(run.run_id)
-        return false
+        if (actualRunIds.has(run.run_id)) return false
+        if (isWorkspaceShellRun(run, workspaceId)) return true
+        if (actualAgentIds.has(run.agent_id)) return false
+        return !stoppedWorkerIds.has(run.agent_id)
       })
       if (retained.length === currentRuns.length) return current
       return { ...current, [workspaceId]: retained }
     })
-  }, [actualRuns, workspaceId])
+  }, [actualRuns, workers, workspaceId])
 
   const recordOptimisticRun = useCallback(
     ({
@@ -110,19 +99,6 @@ export const useOptimisticTerminalRuns = (
         })
         return { ...current, [targetWorkspaceId]: [...retained, run] }
       })
-
-      const existingTimer = timersRef.current.get(runId)
-      if (existingTimer) window.clearTimeout(existingTimer)
-      const timer = window.setTimeout(() => {
-        setOptimisticRunsByWorkspaceId((current) => ({
-          ...current,
-          [targetWorkspaceId]: (current[targetWorkspaceId] ?? []).filter(
-            (item) => item.run_id !== runId
-          ),
-        }))
-        timersRef.current.delete(runId)
-      }, OPTIMISTIC_RUN_TTL_MS)
-      timersRef.current.set(runId, timer)
     },
     []
   )

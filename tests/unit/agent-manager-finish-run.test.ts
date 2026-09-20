@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import type { AgentRunRecord } from '../../src/server/agent-manager.js'
+import { finishAgentRun } from '../../src/server/agent-manager-support.js'
+import type { PtyOutputBus } from '../../src/server/pty-output-bus.js'
+
 const exitSequences: Array<Array<number | null>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 1000, intervalMs = 10) => {
@@ -19,7 +23,7 @@ const waitFor = async (assertion: () => void, timeoutMs = 1000, intervalMs = 10)
   throw lastError
 }
 
-vi.mock('node-pty', () => ({
+vi.mock('@lydell/node-pty', () => ({
   spawn: () => {
     const exitCodes = exitSequences.shift() ?? [0, 0]
     let exitHandler: ((event: { exitCode: number | null }) => void) | undefined
@@ -57,7 +61,7 @@ describe('agent manager finishRun', () => {
 
     const run = await manager.startAgent({
       agentId: 'agent-1',
-      command: '/bin/bash',
+      command: process.execPath,
       cwd: '/tmp',
       onExit: onExitSpy,
     })
@@ -77,7 +81,7 @@ describe('agent manager finishRun', () => {
 
     const run = await manager.startAgent({
       agentId: 'agent-2',
-      command: '/bin/bash',
+      command: process.execPath,
       cwd: '/tmp',
       onExit: onExitSpy,
     })
@@ -98,7 +102,7 @@ describe('agent manager finishRun', () => {
 
     const run = await manager.startAgent({
       agentId: 'agent-3',
-      command: '/bin/bash',
+      command: process.execPath,
       cwd: '/tmp',
       onExit: onExitSpy,
     })
@@ -110,5 +114,38 @@ describe('agent manager finishRun', () => {
     expect(onExitSpy).toHaveBeenCalledTimes(1)
     expect(onExitSpy).toHaveBeenCalledWith({ exitCode: null, runId: run.runId })
     expect(manager.getRun(run.runId)).toMatchObject({ exitCode: null, status: 'error' })
+  })
+
+  test('clears the PTY output bus even when an onExit hook throws', () => {
+    const clear = vi.fn()
+    const run: AgentRunRecord = {
+      agentId: 'agent-4',
+      exitCode: null,
+      output: 'buffered output',
+      pid: 4242,
+      process: {
+        isStopped: () => false,
+        pause() {},
+        pid: 4242,
+        resize() {},
+        resume() {},
+        stop() {},
+        write() {},
+      },
+      runId: 'run-4',
+      status: 'running',
+      onExit: () => {
+        throw new Error('store failed')
+      },
+    }
+    const bus: PtyOutputBus = {
+      clear,
+      publish: vi.fn(),
+      subscribe: vi.fn(),
+    }
+
+    expect(() => finishAgentRun(run, 0, bus)).toThrow('store failed')
+    expect(clear).toHaveBeenCalledWith('run-4')
+    expect(run.status).toBe('exited')
   })
 })

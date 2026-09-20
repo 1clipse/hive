@@ -24,7 +24,7 @@ You need prior written permission to:
   distribution, hosted service, or commercial product.
 - Present a fork or derivative work in a way that suggests it is official,
   endorsed, sponsored, or maintained by tt-a1i.
-- Register domains, social accounts, packages, apps, or marketplace names that
+- Register domains, social accounts, packages, apps, or marketplaces names that
   are likely to confuse users about whether they are official Hive properties.
 - Use Hive brand assets in paid advertising, product packaging, or hosted
   service branding.

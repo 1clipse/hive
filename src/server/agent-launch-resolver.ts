@@ -3,6 +3,7 @@ import type { SettingsStore } from './settings-store.js'
 import {
   createStartupCommandLaunch,
   getStartupCommandExecutable,
+  normalizeExecutableToken,
 } from './startup-command-parser.js'
 
 export const resolveCommandPresetLaunchConfig = (
@@ -24,8 +25,14 @@ const findPresetForStartupCommand = (
   commandPresetId: string | null
 ) => {
   if (commandPresetId) return settings.getCommandPreset(commandPresetId)
-  const executable = getStartupCommandExecutable(startupCommand)
-  return executable ? settings.getCommandPreset(executable) : undefined
+  // Reduce the raw token (which may be a bare command, an absolute path,
+  // or a Windows path with spaces and a .cmd suffix) to the canonical
+  // brand id before looking up the preset. Without this normalization
+  // step `getCommandPreset` only matched bare command names — Windows
+  // users typing the full nvm4w path lost CLI brand identification,
+  // session capture, and post-start input strategy in one swoop.
+  const brandId = normalizeExecutableToken(getStartupCommandExecutable(startupCommand))
+  return brandId ? settings.getCommandPreset(brandId) : undefined
 }
 
 export const resolveStartupCommandLaunchConfig = (

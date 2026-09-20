@@ -11,6 +11,7 @@ import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { App } from '../../web/src/app.js'
 import { Sidebar } from '../../web/src/sidebar/Sidebar.js'
 import { ToastProvider } from '../../web/src/ui/useToast.js'
+import { APP_VERSION } from '../../web/src/version.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 class MockTerminal {
@@ -60,6 +61,8 @@ let baseUrl = ''
 let cookie = ''
 
 beforeEach(async () => {
+  window.localStorage?.clear?.()
+  window.localStorage.setItem('hive.last-seen-version', APP_VERSION)
   const server = await startTestServer()
   cleanupServer = server.close
   baseUrl = server.baseUrl
@@ -157,9 +160,9 @@ describe('Sidebar EmptyState CTA', () => {
     renderSidebar({ ...emptyProps, workspaces: [] })
     const emptyState = screen.getByTestId('empty-state')
     expect(within(emptyState).getByRole('button', { name: 'New Workspace' })).toBeInTheDocument()
-    // Bottom dashed button is hidden when list is empty:
-    const allNewBtns = screen.getAllByRole('button', { name: 'New Workspace' })
-    expect(allNewBtns).toHaveLength(1)
+    // Bottom dashed list button is hidden when the list is empty; compact mode
+    // gets its own icon CTA next to the EmptyState.
+    expect(document.querySelector('.ws-add')).toBeNull()
     // Callback wiring: clicking the CTA must call onCreateClick.
     fireEvent.click(within(emptyState).getByRole('button', { name: 'New Workspace' }))
     expect(emptyProps.onCreateClick).toHaveBeenCalledOnce()
@@ -173,6 +176,18 @@ describe('Sidebar EmptyState CTA', () => {
     // Must be a child of the workspaces <ul>, not a sibling pinned to the
     // sidebar footer — that's the "moved into the list" requirement.
     expect(btn.closest('ul')).not.toBeNull()
+  })
+
+  test('renders footer links for demo video and GitHub repository', () => {
+    renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
+    expect(screen.getByRole('link', { name: 'Watch the Hive demo video' })).toHaveAttribute(
+      'href',
+      'https://www.bilibili.com/video/BV1UHLp6nEQR'
+    )
+    expect(screen.getByRole('link', { name: 'Open the Hive GitHub repository' })).toHaveAttribute(
+      'href',
+      'https://github.com/tt-a1i/hive'
+    )
   })
 
   test('renders both row and compact avatar cell for each workspace', () => {
@@ -214,9 +229,11 @@ describe('Sidebar EmptyState CTA', () => {
       onCreateClick,
       workspaces: [],
     })
-    const emptyStateBtn = screen.getByRole('button', { name: 'New Workspace' })
+    const emptyState = screen.getByTestId('empty-state')
+    const emptyStateBtn = within(emptyState).getByRole('button', { name: 'New Workspace' })
     expect(emptyStateBtn).toBeDisabled()
     expect(emptyStateBtn).toHaveAttribute('title', disabledReason)
+    expect(screen.queryByTestId('sidebar-empty-compact-add')).toBeNull()
     fireEvent.click(emptyStateBtn)
     expect(onCreateClick).not.toHaveBeenCalled()
 

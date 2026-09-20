@@ -1,7 +1,20 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 
+import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { buildProtocolDoc } from './hive-team-guidance.js'
+import type { WorkflowCliPolicy } from './workflow-cli-policy.js'
 
 interface TasksFileService {
   readTasks: (workspacePath: string) => string
@@ -21,21 +34,66 @@ export const getProtocolFilePath = (workspacePath: string) =>
   join(workspacePath, HIVE_DIR_NAME, PROTOCOL_FILE_NAME)
 
 const getLegacyTasksFilePath = (workspacePath: string) => join(workspacePath, TASKS_FILE_NAME)
+const RETRYABLE_TASKS_FS_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
+const TASKS_FS_RETRY_DELAYS_MS = [20, 50, 100]
+
+const sleepSync = (ms: number) => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+const runRetryableTasksFileOperation = <T>(operation: () => T): T => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return operation()
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      const delay = TASKS_FS_RETRY_DELAYS_MS[attempt]
+      if (!code || !RETRYABLE_TASKS_FS_ERROR_CODES.has(code) || delay === undefined) throw error
+      sleepSync(delay)
+    }
+  }
+}
 
 const ensureTasksDir = (workspacePath: string) => {
-  mkdirSync(dirname(getTasksFilePath(workspacePath)), { recursive: true })
+  runRetryableTasksFileOperation(() =>
+    mkdirSync(dirname(getTasksFilePath(workspacePath)), { recursive: true })
+  )
+}
+
+const writeUtf8FileAtomically = (targetPath: string, content: string) => {
+  const tempPath = join(dirname(targetPath), `.${basename(targetPath)}.${randomUUID()}.tmp`)
+  let committed = false
+  let fd: number | null = null
+  try {
+    try {
+      fd = openSync(tempPath, 'w')
+      writeFileSync(fd, content, 'utf8')
+      fsyncSync(fd)
+    } finally {
+      if (fd !== null) {
+        closeSync(fd)
+        fd = null
+      }
+    }
+    renameSync(tempPath, targetPath)
+    committed = true
+  } finally {
+    if (!committed && existsSync(tempPath)) rmSync(tempPath, { force: true })
+  }
 }
 
 export const ensureTasksFile = (workspacePath: string) => {
   ensureTasksDir(workspacePath)
   const tasksFilePath = getTasksFilePath(workspacePath)
   if (existsSync(tasksFilePath)) {
-    return readFileSync(tasksFilePath, 'utf8')
+    return runRetryableTasksFileOperation(() => readFileSync(tasksFilePath, 'utf8'))
   }
 
   const legacyTasksFilePath = getLegacyTasksFilePath(workspacePath)
-  const content = existsSync(legacyTasksFilePath) ? readFileSync(legacyTasksFilePath, 'utf8') : ''
-  writeFileSync(tasksFilePath, content, 'utf8')
+  const content = existsSync(legacyTasksFilePath)
+    ? runRetryableTasksFileOperation(() => readFileSync(legacyTasksFilePath, 'utf8'))
+    : ''
+  runRetryableTasksFileOperation(() => writeUtf8FileAtomically(tasksFilePath, content))
   return content
 }
 
@@ -45,13 +103,19 @@ export const ensureTasksFile = (workspacePath: string) => {
  * on every workspace open means a Hive version bump that changes the rules
  * propagates without manual intervention.
  */
-export const ensureProtocolFile = (workspacePath: string) => {
+export const ensureProtocolFile = (
+  workspacePath: string,
+  cliPolicy?: WorkflowCliPolicy,
+  flags: FeatureFlags = FEATURE_FLAGS_ALL_OFF
+) => {
   ensureTasksDir(workspacePath)
   const protocolFilePath = getProtocolFilePath(workspacePath)
-  const desired = buildProtocolDoc()
-  const current = existsSync(protocolFilePath) ? readFileSync(protocolFilePath, 'utf8') : null
+  const desired = buildProtocolDoc(cliPolicy, flags)
+  const current = existsSync(protocolFilePath)
+    ? runRetryableTasksFileOperation(() => readFileSync(protocolFilePath, 'utf8'))
+    : null
   if (current === desired) return desired
-  writeFileSync(protocolFilePath, desired, 'utf8')
+  runRetryableTasksFileOperation(() => writeUtf8FileAtomically(protocolFilePath, desired))
   return desired
 }
 
@@ -63,7 +127,9 @@ export const createTasksFileService = (): TasksFileService => {
 
     writeTasks(workspacePath, content) {
       ensureTasksDir(workspacePath)
-      writeFileSync(getTasksFilePath(workspacePath), content, 'utf8')
+      runRetryableTasksFileOperation(() =>
+        writeUtf8FileAtomically(getTasksFilePath(workspacePath), content)
+      )
     },
   }
 }

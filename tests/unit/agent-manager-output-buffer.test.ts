@@ -9,7 +9,7 @@ describe('agent manager output buffer (unit)', () => {
     const manager = createAgentManager()
     const run = await manager.startAgent({
       agentId: 'agent-1',
-      command: '/bin/bash',
+      command: process.execPath,
       args: ['huge-output.js'],
       cwd: '/tmp',
       env: {},

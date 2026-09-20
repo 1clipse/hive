@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { spawn } from 'node-pty'
+import { type IWindowsPtyForkOptions, spawn } from '@lydell/node-pty'
 import { resolveSpawnCommand } from './agent-command-resolver.js'
 import { attachAgentPty, toAgentRunSnapshot } from './agent-manager-support.js'
+import { logAgentStartupFailure } from './agent-startup-diagnostics.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
 type RunStatus = 'starting' | 'running' | 'exited' | 'error'
@@ -51,13 +52,54 @@ interface AgentManager {
 
 const createRunId = () => randomUUID()
 
-const createSpawnEnv = (inputEnv?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
-  const env = { ...process.env, ...inputEnv }
+const CLAUDE_AGENT_SESSION_ENV_KEYS = new Set([
+  'AI_AGENT',
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_EFFORT',
+])
+
+const isClaudeAgentSessionEnvKey = (key: string, platform: NodeJS.Platform) =>
+  CLAUDE_AGENT_SESSION_ENV_KEYS.has(platform === 'win32' ? key.toUpperCase() : key)
+
+const getWindowsEnvKey = (env: NodeJS.ProcessEnv, key: string): string | undefined => {
+  if (Object.hasOwn(env, key)) return key
+  return Object.keys(env)
+    .filter((item) => item.toLowerCase() === key.toLowerCase())
+    .at(-1)
+}
+
+export const createSpawnEnv = (
+  inputEnv?: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+  parentEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv => {
+  const env = { ...parentEnv }
+  for (const [key, value] of Object.entries(inputEnv ?? {})) {
+    const targetKey = platform === 'win32' ? (getWindowsEnvKey(env, key) ?? key) : key
+    env[targetKey] = value
+  }
   for (const key of Object.keys(env)) {
-    if (env[key] === undefined) delete env[key]
+    // Final spawn boundary: strip outer Claude session identity, not Claude runtime config.
+    if (env[key] === undefined || isClaudeAgentSessionEnvKey(key, platform)) delete env[key]
   }
   return env
 }
+
+export const buildAgentPtySpawnOptions = (
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): IWindowsPtyForkOptions => ({
+  cols: 80,
+  cwd,
+  env,
+  name: 'xterm-256color',
+  rows: 24,
+  ...(platform === 'win32' ? { useConpty: true } : {}),
+})
 
 export const createAgentManager = ({
   ptyOutputBus = createPtyOutputBus(),
@@ -81,8 +123,6 @@ export const createAgentManager = ({
     },
     async startAgent(input) {
       const env = createSpawnEnv(input.env)
-      const spawnCommand = resolveSpawnCommand(input.command, input.cwd, env, input.args ?? [])
-
       const runId = createRunId()
 
       const run: AgentRunRecord = {
@@ -110,16 +150,14 @@ export const createAgentManager = ({
       runs.set(runId, run)
 
       try {
+        const spawnCommand = resolveSpawnCommand(input.command, input.cwd, env, input.args ?? [])
         attachAgentPty(
           run,
-          spawn(spawnCommand.command, spawnCommand.args, {
-            cwd: input.cwd,
-            env,
-            name: 'xterm-256color',
-          }),
+          spawn(spawnCommand.command, spawnCommand.args, buildAgentPtySpawnOptions(input.cwd, env)),
           ptyOutputBus
         )
       } catch (error) {
+        logAgentStartupFailure(run, input.cwd, env, error)
         runs.delete(runId)
         throw error
       }

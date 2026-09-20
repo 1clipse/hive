@@ -2,9 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import WebSocket from 'ws'
 
+import { openRawWebSocket, writeRsv2Rsv3MalformedFrame } from '../helpers/raw-websocket.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -72,6 +73,7 @@ const expectUpgradeStatus = async (
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
@@ -124,7 +126,11 @@ describe('tasks watcher websocket', () => {
       const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
       })
       expect(workspaceResponse.status).toBe(201)
       const workspace = (await workspaceResponse.json()) as { id: string }
@@ -143,6 +149,49 @@ describe('tasks watcher websocket', () => {
     }
   })
 
+  test('malformed established task watcher websocket frames are handled without crashing the runtime', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-tasks-malformed-ws-'))
+    tempDirs.push(workspacePath)
+    mkdirSync(join(workspacePath, '.hive'), { recursive: true })
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [ ] initial\n', 'utf8')
+
+    const server = await startTestServer()
+    let rawSocket: Awaited<ReturnType<typeof openRawWebSocket>> | undefined
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
+      })
+      expect(workspaceResponse.status).toBe(201)
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      rawSocket = await openRawWebSocket(server.baseUrl, `/ws/tasks/${workspace.id}`, cookie)
+
+      writeRsv2Rsv3MalformedFrame(rawSocket)
+
+      await waitFor(() => {
+        expect(consoleError).toHaveBeenCalledWith(
+          expect.stringContaining(`tasks ${workspace.id} websocket error`),
+          expect.objectContaining({
+            code: 'WS_ERR_UNEXPECTED_RSV_2_3',
+            message: 'Invalid WebSocket frame: RSV2 and RSV3 must be clear',
+          })
+        )
+      })
+      const response = await fetch(`${server.baseUrl}/api/ui/session`)
+      expect(response.status).toBe(200)
+    } finally {
+      rawSocket?.destroy()
+      await server.close()
+    }
+  })
+
   test('external .hive/tasks.md change broadcasts tasks-updated over websocket', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'hive-tasks-watcher-ws-'))
     tempDirs.push(workspacePath)
@@ -155,7 +204,11 @@ describe('tasks watcher websocket', () => {
       const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
       })
       expect(workspaceResponse.status).toBe(201)
       const workspace = (await workspaceResponse.json()) as { id: string }
@@ -190,6 +243,56 @@ describe('tasks watcher websocket', () => {
         })
       } finally {
         clearInterval(writer)
+        socket.close()
+      }
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('PUT /tasks broadcasts the saved content after Hive atomically replaces tasks.md', async () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-tasks-api-watcher-ws-'))
+    tempDirs.push(workspacePath)
+    mkdirSync(join(workspacePath, '.hive'), { recursive: true })
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [ ] initial\n', 'utf8')
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
+      })
+      expect(workspaceResponse.status).toBe(201)
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      await server.store.startWorkspaceWatch(workspace.id)
+      const socket = await openSocket(toWsUrl(server.baseUrl, `/ws/tasks/${workspace.id}`), cookie)
+      const messages: string[] = []
+      socket.on('message', (chunk) => messages.push(chunk.toString()))
+
+      const updateResponse = await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ content: '- [x] saved through Hive\n' }),
+      })
+      expect(updateResponse.status).toBe(200)
+
+      try {
+        await waitFor(() => {
+          const payload = messages.map(
+            (message) => JSON.parse(message) as { content: string; type: string }
+          )
+          expect(payload).toContainEqual({
+            type: 'tasks-updated',
+            content: '- [x] saved through Hive\n',
+          })
+        })
+      } finally {
         socket.close()
       }
     } finally {

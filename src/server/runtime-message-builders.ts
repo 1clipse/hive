@@ -69,19 +69,6 @@ export const createStatusMessage = (
   workspaceId,
 })
 
-export const createSystemEnvSyncMessage = (
-  workspaceId: string,
-  agentId: string,
-  text: string
-): MessageLogRecord => ({
-  createdAt: Date.now(),
-  text,
-  toAgentId: agentId,
-  type: 'system_env_sync',
-  workerId: agentId,
-  workspaceId,
-})
-
 export const createSystemRecoverySummaryMessage = (
   workspaceId: string,
   agentId: string,

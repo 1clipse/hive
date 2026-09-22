@@ -65,6 +65,20 @@ export interface TerminalStreamHub {
 export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub => {
   const runStates = new Map<string, RunState>()
 
+  const interactiveOwner = (state: RunState) => {
+    const viewers = [...state.viewers.values()]
+    const modern = viewers.some((viewer) => viewer.renderEvents)
+    const eligible = viewers.filter(
+      (viewer) => viewer.ioSocket?.readyState === 1 && (!modern || viewer.renderEvents)
+    )
+    // A legacy or disconnected owner cannot answer queries. Elect one live
+    // viewer without letting an automatic reply change the shared PTY grid.
+    return (
+      eligible.find((viewer) => viewer.clientId === state.inputOwner)?.clientId ??
+      eligible[0]?.clientId
+    )
+  }
+
   const rejectLegacyInteraction = (state: RunState, viewer: ViewerState) => {
     if (viewer.renderEvents || ![...state.viewers.values()].some((peer) => peer.renderEvents))
       return false
@@ -242,7 +256,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
           if (message.type === 'output_ack') viewer.flowState?.ack(message.bytes)
           if (message.type === 'resize') {
             if (rejectLegacyInteraction(state, viewer)) return
-            if (!state.inputOwner || state.inputOwner === clientId) {
+            if (!interactiveOwner(state) || interactiveOwner(state) === clientId) {
               resizeRun(runId, state, message.cols, message.rows)
               state.inputOwner = clientId
             }
@@ -292,7 +306,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
             const event = parseTerminalRenderInput(input.toString())
             input = event.data
             if (!event.userInput) {
-              const replyOwner = state.inputOwner ?? state.viewers.keys().next().value
+              const replyOwner = interactiveOwner(state)
               if (replyOwner !== clientId) return
             } else if (input !== '\x1b[I' && input !== '\x1b[O') {
               resizeRun(runId, state, event.cols, event.rows)

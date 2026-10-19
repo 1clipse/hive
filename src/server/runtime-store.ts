@@ -123,6 +123,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     listTerminalRuns: lifecycle.listTerminalRuns,
     closeWorkspaceShell: lifecycle.closeWorkspaceShell,
     configureAgentLaunch: lifecycle.configureAgentLaunch,
+    switchAgentCommandPreset: lifecycle.switchAgentCommandPreset,
     peekAgentLaunchConfig: lifecycle.peekAgentLaunchConfig,
     startAgent: lifecycle.startAgent,
     autostartConfiguredAgents: lifecycle.autostartConfiguredAgents,

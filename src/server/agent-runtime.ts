@@ -17,6 +17,7 @@ import type { CommandPresetRecord } from './command-preset-store.js'
 import type { FeatureFlags } from './feature-flags.js'
 import { ConflictError } from './http-errors.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
+import { autostartAgent } from './orchestrator-autostart.js'
 import { createNoopRestartPolicy, type RestartPolicy } from './restart-policy.js'
 import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 
@@ -210,12 +211,29 @@ export const createAgentRuntime = (
           }
           if (closing) throw new ConflictError('Agent runtime is closing')
           configureLaunch(workspace.id, agentId, config)
-          return startLiveRun(
-            workspace,
+          // Keep handover protection until the replacement's early-exit
+          // window has settled, including a CLI that exits with code zero.
+          const result = await autostartAgent(
+            {
+              startAgent: () =>
+                startLiveRun(
+                  workspace,
+                  agentId,
+                  launchCache.get(workspace.id, agentId),
+                  input.hivePort
+                ),
+              getLiveRun: runtime.getLiveRun,
+              waitForRunExit: runtime.waitForRunExit,
+              peekAgentLaunchConfig: launchCache.peek,
+            },
+            workspace.id,
             agentId,
-            launchCache.get(workspace.id, agentId),
-            input.hivePort
+            input.hivePort,
+            { missingConfigError: 'Agent launch config not found', requireRunning: true }
           )
+          if (!result.ok || !result.run_id)
+            throw new Error(result.error ?? 'Replacement CLI failed to start')
+          return runtime.getLiveRun(result.run_id)
         })
         .finally(() => switchPromises.delete(key))
       switchPromises.set(key, switching)
